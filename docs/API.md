@@ -32,7 +32,7 @@ Public Note visibility requires both `notes.visibility='public'` and every assoc
 
 ## Management API
 
-All `/api/manage/*` endpoints require the administrator session. `GET|POST /notes`, `GET|PATCH|DELETE /notes/{id}` use `NoteWrite`/`NotePatch`:
+All `/api/manage/*` endpoints require the administrator session. `GET /notes?cursor=&limit=` returns `{items,next_cursor}` in `(started_at DESC,id DESC)` order; its signed cursor is opaque and reaches older records without changing sort order. `POST /notes` and `GET|PATCH|DELETE /notes/{id}` use `NoteWrite`/`NotePatch`:
 
 ```json
 {

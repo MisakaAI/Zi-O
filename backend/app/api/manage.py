@@ -9,12 +9,27 @@ from ..errors import AppError
 from ..files import resolve_cover, safe_remove
 from ..repositories import content as repo
 from ..schemas import CategoryPatch, CategoryWrite, ItemPatch, ItemWrite, NotePatch, NoteWrite, SettingsPatch, TagPatch, TagWrite, VisibilityRequest
+from ..security import make_cursor, read_cursor
 from ..services import content as service
 from ..services.auth import public_user
 from ..timeutil import now_ms
 from .deps import get_db, require_user, require_write_origin
 
 router = APIRouter(prefix="/api/manage", tags=["manage"], dependencies=[Depends(require_user)])
+
+_NOTES_CURSOR_SCOPE = {"resource": "manage_notes"}
+
+
+def _notes_cursor_position(cursor: str | None, secret: bytes) -> tuple[int, int] | None:
+    if not cursor:
+        return None
+    try:
+        payload = read_cursor(cursor, secret)
+        if payload.get("scope") != _NOTES_CURSOR_SCOPE:
+            raise ValueError("cursor_scope_mismatch")
+        return int(payload["started_at"]), int(payload["id"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise AppError("cursor_invalid", "cursor is invalid", 400) from exc
 
 
 @router.get("/profile")
@@ -33,9 +48,19 @@ def update_settings(payload: SettingsPatch, db=Depends(get_db)):
 
 
 @router.get("/notes")
-def notes(limit: int = Query(default=50, ge=1, le=100), db=Depends(get_db)):
-    rows = db.execute("SELECT * FROM notes ORDER BY started_at DESC,id DESC LIMIT ?", (limit,)).fetchall()
-    return {"items": [service.note_dict(db, row, include_raw=True) for row in rows]}
+def notes(request: Request, cursor: str | None = None, limit: int = Query(default=50, ge=1, le=100), db=Depends(get_db)):
+    position = _notes_cursor_position(cursor, request.app.state.settings.secret_key)
+    rows = repo.timeline_rows(db, public=False, limit=limit + 1, cursor=position)
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+    next_cursor = None
+    if has_more and rows:
+        last = rows[-1]
+        next_cursor = make_cursor(
+            {"v": 1, "scope": _NOTES_CURSOR_SCOPE, "started_at": last["started_at"], "id": last["id"]},
+            request.app.state.settings.secret_key,
+        )
+    return {"items": [service.note_dict(db, row, include_raw=True) for row in rows], "next_cursor": next_cursor}
 
 
 @router.post("/notes", dependencies=[Depends(require_write_origin)])

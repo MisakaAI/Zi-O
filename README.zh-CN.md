@@ -61,7 +61,7 @@ PYTHONPATH=backend .venv/bin/python -m app.cli backup /var/backups/zio-$(date +%
 
 恢复时先停止服务，将已验证的备份复制到新文件，并使用 SQLite 执行 `PRAGMA integrity_check`。保留带日期的旧数据库作为回滚副本，然后原子替换 `ZIO_DATABASE_PATH` 并重启服务。不要使用 `cp` 直接复制正在写入的数据库作为备份方式。
 
-完整的请求/响应契约和稳定错误码见 [`docs/API.md`](docs/API.md)，需求文档见 [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md)。
+当前系统结构和 ASCII 请求流程见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。完整的请求/响应契约和稳定错误码见 [`docs/API.md`](docs/API.md)，需求文档见 [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md)。
 
 ## 验证
 
@@ -69,4 +69,3 @@ PYTHONPATH=backend .venv/bin/python -m app.cli backup /var/backups/zio-$(date +%
 PYTHONPATH=backend .venv/bin/python -m unittest discover -s backend/tests -v
 npm --prefix frontend run build
 ```
-

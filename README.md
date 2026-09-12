@@ -61,7 +61,7 @@ PYTHONPATH=backend .venv/bin/python -m app.cli backup /var/backups/zio-$(date +%
 
 For a restore, stop the service, copy the verified backup to a new file, run `PRAGMA integrity_check` with SQLite, retain the old database as a dated rollback copy, then atomically replace `ZIO_DATABASE_PATH` and restart. Never copy a live database file with `cp` as a backup method.
 
-The complete request/response contract and stable error codes are documented in [`docs/API.md`](docs/API.md); requirements are in [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md).
+The current system structure and ASCII request flows are documented in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). The complete request/response contract and stable error codes are in [`docs/API.md`](docs/API.md); requirements are in [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md).
 
 ## Verification
 

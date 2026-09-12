@@ -3,7 +3,9 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
+from app.api.manage import notes as manage_notes
 from app.db.connection import connect
 from app.db.migrations import migrate
 from app.errors import AppError
@@ -48,6 +50,19 @@ class CoreTests(unittest.TestCase):
         self.assertEqual([row["title"] for row in rows], ["two", "one"])
         rows = __import__("app.repositories.content", fromlist=["timeline_rows"]).timeline_rows(self.db, public=True, limit=2, cursor=(rows[-1]["started_at"], rows[-1]["id"]))
         self.assertEqual([row["title"] for row in rows], ["three"])
+
+    def test_manage_note_cursor_reaches_older_records(self):
+        for index in range(51):
+            self.note(title=str(index), started_at=f"2024-01-01T00:00:{index:02d}Z")
+        request = SimpleNamespace(
+            app=SimpleNamespace(state=SimpleNamespace(settings=SimpleNamespace(secret_key=b"test-secret")))
+        )
+        first = manage_notes(request=request, cursor=None, limit=50, db=self.db)
+        self.assertEqual(len(first["items"]), 50)
+        self.assertIsNotNone(first["next_cursor"])
+        second = manage_notes(request=request, cursor=first["next_cursor"], limit=50, db=self.db)
+        self.assertEqual([note["title"] for note in second["items"]], ["0"])
+        self.assertIsNone(second["next_cursor"])
 
     def test_item_private_cascade_and_explicit_publish(self):
         book = content.create_item(self.db, ItemWrite(category_id=2, title="Book", visibility="public"))
