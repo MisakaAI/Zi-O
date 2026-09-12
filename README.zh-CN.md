@@ -45,6 +45,8 @@ PYTHONPATH=backend .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
 
 打开 `http://127.0.0.1:8000/now`。前端开发时，让 API 运行在 8000 端口并设置 `ZIO_PUBLIC_ORIGIN=http://127.0.0.1:5173`，然后运行 `npm --prefix frontend run dev`；Vite 会代理 `/api` 和 `/page`。
 
+前端界面默认使用简体中文，可通过顶栏的语言选择器切换 English；选择会保存在当前浏览器中。
+
 ## 运维
 
 服务启动时会自动应用待执行的迁移。使用 `GET /api/health` 进行健康检查。`deploy/zio.service` 提供了 systemd 示例：它以非 root 用户运行单个 Uvicorn worker，并假设由反向代理负责 TLS。将 `ZIO_SECRET_KEY` 和生产环境 Origin 保存在权限为 600 的 `/etc/zio/zio.env` 中。
