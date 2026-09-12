@@ -1,0 +1,383 @@
+from __future__ import annotations
+
+import json
+import sqlite3
+import uuid
+from typing import Iterable
+
+from ..domain import name_key, normalize_text, slugify, validate_metadata, validate_static_path, validate_timezone
+from ..errors import AppError
+from ..repositories import content as repo
+from ..rendering import render_content
+from ..schemas import CategoryLink, ItemLink, ItemPatch, ItemWrite, NotePatch, NoteWrite, SettingsPatch, TagPatch, TagWrite
+from ..timeutil import iso_utc, now_ms, parse_utc_ms
+
+
+def _required_row(row: sqlite3.Row | None, code: str, message: str) -> sqlite3.Row:
+    if row is None:
+        raise AppError(code, message, 404)
+    return row
+
+
+def _parse_time(value: str | int | float, field: str) -> int:
+    try:
+        result = parse_utc_ms(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise AppError("invalid_timestamp", f"{field} must be a UTC ISO timestamp", 422) from exc
+    if result < -62135596800000 or result > 253402300799999:
+        raise AppError("invalid_timestamp", f"{field} is out of range", 422)
+    return result
+
+
+def _category_links(db: sqlite3.Connection, links: list[CategoryLink] | None) -> list[tuple[int, int]]:
+    if not links:
+        journal = db.execute("SELECT id FROM categories WHERE code='JOURNAL'").fetchone()
+        return [(journal["id"], 1)]
+    ids = [link.category_id for link in links]
+    if len(ids) != len(set(ids)):
+        raise AppError("duplicate_category", "a category may only appear once", 422)
+    primary = [link.category_id for link in links if link.is_primary]
+    if len(primary) != 1:
+        raise AppError("primary_category_required", "exactly one category must be primary", 422)
+    found = {row["id"] for row in db.execute(f"SELECT id FROM categories WHERE id IN ({','.join('?' for _ in ids)})", ids).fetchall()}
+    if found != set(ids):
+        raise AppError("category_not_found", "one or more categories do not exist", 422)
+    return [(link.category_id, int(link.is_primary)) for link in links]
+
+
+def _item_links(db: sqlite3.Connection, links: list[ItemLink] | None) -> list[ItemLink]:
+    links = links or []
+    ids = [link.item_id for link in links]
+    if len(ids) != len(set(ids)):
+        raise AppError("duplicate_item", "an item may only appear once", 422)
+    if ids:
+        found = {row["id"] for row in db.execute(f"SELECT id FROM items WHERE id IN ({','.join('?' for _ in ids)})", ids).fetchall()}
+        if found != set(ids):
+            raise AppError("item_not_found", "one or more items do not exist", 422)
+    return links
+
+
+def _tag_ids(db: sqlite3.Connection, tag_ids: list[int] | None) -> list[int]:
+    ids = tag_ids or []
+    if len(ids) != len(set(ids)):
+        raise AppError("duplicate_tag", "a tag may only appear once", 422)
+    if ids:
+        found = {row["id"] for row in db.execute(f"SELECT id FROM tags WHERE id IN ({','.join('?' for _ in ids)})", ids).fetchall()}
+        if found != set(ids):
+            raise AppError("tag_not_found", "one or more tags do not exist", 422)
+    return ids
+
+
+def _ensure_public_links(db: sqlite3.Connection, note_id: int, visibility: str, links: list[ItemLink]) -> None:
+    if visibility != "public" or not links:
+        return
+    ids = [link.item_id for link in links]
+    placeholders = ",".join("?" for _ in ids)
+    private = db.execute(f"SELECT id FROM items WHERE id IN ({placeholders}) AND visibility='private'", ids).fetchall()
+    if private:
+        raise AppError("private_item_link", "a public note cannot be linked to a private item", 409, {"item_ids": [row["id"] for row in private]})
+
+
+def _replace_note_links(db: sqlite3.Connection, note_id: int, categories: list[tuple[int, int]], items: list[ItemLink], tags: list[int]) -> None:
+    db.execute("DELETE FROM note_categories WHERE note_id=?", (note_id,))
+    db.executemany("INSERT INTO note_categories(note_id, category_id, is_primary) VALUES (?, ?, ?)", [(note_id, cid, primary) for cid, primary in categories])
+    db.execute("DELETE FROM note_items WHERE note_id=?", (note_id,))
+    db.executemany(
+        "INSERT INTO note_items(note_id, item_id, context_label, progress_text) VALUES (?, ?, ?, ?)",
+        [(note_id, item.item_id, item.context_label, item.progress_text) for item in items],
+    )
+    db.execute("DELETE FROM note_tags WHERE note_id=?", (note_id,))
+    db.executemany("INSERT INTO note_tags(note_id, tag_id) VALUES (?, ?)", [(note_id, tag_id) for tag_id in tags])
+
+
+def note_dict(db: sqlite3.Connection, row: sqlite3.Row, *, include_raw: bool) -> dict:
+    result = {
+        "id": row["id"],
+        "archive_no": row["archive_no"],
+        "archive_label": f"LOG/{row['archive_no']:06d}",
+        "title": row["title"],
+        "content_format": row["content_format"],
+        "content_html_sanitized": render_content(row["content_raw"], row["content_format"]),
+        "started_at": iso_utc(row["started_at"]),
+        "ended_at": iso_utc(row["ended_at"]),
+        "visibility": row["visibility"],
+        "has_static_page": bool(row["static_path"]),
+        "created_at": iso_utc(row["created_at"]),
+        "updated_at": iso_utc(row["updated_at"]),
+        "categories": [
+            {"id": item["id"], "code": item["code"], "name": item["name"], "is_primary": bool(item["is_primary"])}
+            for item in repo.categories_for_note(db, row["id"])
+        ],
+        "items": [
+            {
+                "id": item["id"], "title": item["title"], "subtitle": item["subtitle"], "creator": item["creator"],
+                "visibility": item["visibility"], "category_code": item["category_code"], "category_name": item["category_name"],
+                "context_label": item["context_label"], "progress_text": item["progress_text"],
+            }
+            for item in repo.items_for_note(db, row["id"])
+        ],
+        "tags": [{"id": tag["id"], "name": tag["name"], "slug": tag["slug"]} for tag in repo.tags_for_note(db, row["id"])],
+    }
+    if include_raw:
+        result["content_raw"] = row["content_raw"]
+        result["static_path"] = row["static_path"]
+    elif row["static_path"]:
+        result["static_url"] = f"/page/{row['id']}"
+    return result
+
+
+def item_dict(db: sqlite3.Connection, row: sqlite3.Row, *, public: bool) -> dict:
+    metadata = json.loads(row["metadata_json"] or "{}")
+    result = {
+        "id": row["id"], "title": row["title"], "subtitle": row["subtitle"], "creator": row["creator"],
+        "category_id": row["category_id"], "category_code": row["category_code"] if "category_code" in row.keys() else None,
+        "category_name": row["category_name"] if "category_name" in row.keys() else None,
+        "visibility": row["visibility"], "metadata_json": metadata,
+        "created_at": iso_utc(row["created_at"]), "updated_at": iso_utc(row["updated_at"]),
+        "activity_at": iso_utc(row["activity_at"]) if "activity_at" in row.keys() and row["activity_at"] else None,
+    }
+    if row["poster_path"]:
+        result["poster_url"] = f"/api/{'public' if public else 'manage'}/items/{row['id']}/poster"
+    else:
+        result["poster_url"] = None
+    return result
+
+
+def create_note(db: sqlite3.Connection, payload: NoteWrite) -> dict:
+    started = now_ms() if payload.started_at is None else _parse_time(payload.started_at, "started_at")
+    ended = _parse_time(payload.ended_at, "ended_at") if payload.ended_at is not None else None
+    if ended is not None and ended < started:
+        raise AppError("invalid_interval", "ended_at cannot precede started_at", 422)
+    static_path = validate_static_path(payload.static_path)
+    categories = _category_links(db, payload.categories)
+    items = _item_links(db, payload.items)
+    tags = _tag_ids(db, payload.tag_ids)
+    _ensure_public_links(db, 0, payload.visibility, items)
+    title = normalize_text(payload.title, 200, "title")
+    content = normalize_text(payload.content_raw, 1_048_576, "content_raw")
+    timestamp = now_ms()
+    db.execute("BEGIN IMMEDIATE")
+    try:
+        db.execute("UPDATE counters SET value=value+1 WHERE name='archive_no'")
+        archive_no = db.execute("SELECT value FROM counters WHERE name='archive_no'").fetchone()["value"]
+        cursor = db.execute(
+            """INSERT INTO notes(archive_no,title,content_raw,content_format,started_at,ended_at,visibility,static_path,created_at,updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (archive_no, title, content, payload.content_format, started, ended, payload.visibility, static_path, timestamp, timestamp),
+        )
+        note_id = cursor.lastrowid
+        _replace_note_links(db, note_id, categories, items, tags)
+        db.execute("COMMIT")
+    except Exception:
+        db.execute("ROLLBACK")
+        raise
+    return note_dict(db, _required_row(repo.get_note(db, note_id), "note_not_found", "note was not created"), include_raw=True)
+
+
+def update_note(db: sqlite3.Connection, note_id: int, payload: NotePatch) -> dict:
+    current = _required_row(repo.get_note(db, note_id), "note_not_found", "note not found",)
+    data = payload.model_dump(exclude_unset=True)
+    started = _parse_time(data["started_at"], "started_at") if "started_at" in data and data["started_at"] is not None else current["started_at"]
+    ended = _parse_time(data["ended_at"], "ended_at") if "ended_at" in data and data["ended_at"] is not None else (None if "ended_at" in data else current["ended_at"])
+    if ended is not None and ended < started:
+        raise AppError("invalid_interval", "ended_at cannot precede started_at", 422)
+    visibility = data.get("visibility", current["visibility"])
+    categories = _category_links(db, payload.categories) if "categories" in data else None
+    items = _item_links(db, payload.items) if "items" in data else None
+    tags = _tag_ids(db, payload.tag_ids) if "tag_ids" in data else None
+    if items is not None:
+        _ensure_public_links(db, note_id, visibility, items)
+    elif visibility == "public":
+        private = db.execute("""SELECT i.id FROM items i JOIN note_items ni ON ni.item_id=i.id WHERE ni.note_id=? AND i.visibility='private'""", (note_id,)).fetchall()
+        if private:
+            raise AppError("private_item_link", "a public note cannot be linked to a private item", 409)
+    static_path = validate_static_path(data["static_path"]) if "static_path" in data else current["static_path"]
+    values = {
+        "title": normalize_text(data["title"], 200, "title") if "title" in data else current["title"],
+        "content_raw": normalize_text(data["content_raw"], 1_048_576, "content_raw") if "content_raw" in data else current["content_raw"],
+        "content_format": data.get("content_format", current["content_format"]),
+        "started_at": started, "ended_at": ended, "visibility": visibility, "static_path": static_path, "updated_at": now_ms(),
+    }
+    db.execute("BEGIN IMMEDIATE")
+    try:
+        db.execute(
+            """UPDATE notes SET title=?,content_raw=?,content_format=?,started_at=?,ended_at=?,visibility=?,static_path=?,updated_at=? WHERE id=?""",
+            (*values.values(), note_id),
+        )
+        if categories is not None or items is not None or tags is not None:
+            old_categories = [(row["id"], int(row["is_primary"])) for row in repo.categories_for_note(db, note_id)]
+            old_items = [ItemLink(item_id=row["id"], context_label=row["context_label"], progress_text=row["progress_text"]) for row in repo.items_for_note(db, note_id)]
+            old_tags = [row["id"] for row in repo.tags_for_note(db, note_id)]
+            _replace_note_links(db, note_id, categories or old_categories, items if items is not None else old_items, tags if tags is not None else old_tags)
+        db.execute("COMMIT")
+    except Exception:
+        db.execute("ROLLBACK")
+        raise
+    return note_dict(db, _required_row(repo.get_note(db, note_id), "note_not_found", "note not found"), include_raw=True)
+
+
+def delete_note(db: sqlite3.Connection, note_id: int) -> None:
+    _required_row(repo.get_note(db, note_id), "note_not_found", "note not found")
+    db.execute("DELETE FROM notes WHERE id=?", (note_id,))
+
+
+def create_item(db: sqlite3.Connection, payload: ItemWrite) -> dict:
+    category = _required_row(repo.get_category(db, payload.category_id), "category_not_found", "category not found",)
+    if not category["is_root"] or category["parent_id"] is not None:
+        raise AppError("invalid_item_category", "Item category must be a root category", 422)
+    metadata = validate_metadata(category["code"], payload.metadata_json)
+    timestamp = now_ms()
+    cursor = db.execute(
+        """INSERT INTO items(category_id,title,subtitle,creator,visibility,metadata_json,created_at,updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (payload.category_id, normalize_text(payload.title, 200, "title", allow_empty=False), normalize_text(payload.subtitle, 300, "subtitle"), normalize_text(payload.creator, 200, "creator"), payload.visibility, metadata, timestamp, timestamp),
+    )
+    row = db.execute("""SELECT i.*,c.code AS category_code,c.name AS category_name FROM items i JOIN categories c ON c.id=i.category_id WHERE i.id=?""", (cursor.lastrowid,)).fetchone()
+    return item_dict(db, row, public=False)
+
+
+def update_item(db: sqlite3.Connection, item_id: int, payload: ItemPatch) -> dict:
+    current = _required_row(repo.get_item(db, item_id), "item_not_found", "item not found")
+    data = payload.model_dump(exclude_unset=True)
+    category_id = data.get("category_id", current["category_id"])
+    category = _required_row(repo.get_category(db, category_id), "category_not_found", "category not found")
+    if not category["is_root"] or category["parent_id"] is not None:
+        raise AppError("invalid_item_category", "Item category must be a root category", 422)
+    metadata = validate_metadata(category["code"], data.get("metadata_json", json.loads(current["metadata_json"] or "{}")))
+    values = (
+        category_id, data.get("title", current["title"]), data.get("subtitle", current["subtitle"]),
+        data.get("creator", current["creator"]), metadata, now_ms(), item_id,
+    )
+    db.execute("UPDATE items SET category_id=?,title=?,subtitle=?,creator=?,metadata_json=?,updated_at=? WHERE id=?", values)
+    row = db.execute("""SELECT i.*,c.code AS category_code,c.name AS category_name FROM items i JOIN categories c ON c.id=i.category_id WHERE i.id=?""", (item_id,)).fetchone()
+    return item_dict(db, row, public=False)
+
+
+def delete_item(db: sqlite3.Connection, item_id: int) -> str | None:
+    row = _required_row(repo.get_item(db, item_id), "item_not_found", "item not found")
+    old_path = row["poster_path"]
+    db.execute("DELETE FROM items WHERE id=?", (item_id,))
+    return old_path
+
+
+def change_item_visibility(db: sqlite3.Connection, item_id: int, visibility: str) -> dict:
+    row = _required_row(repo.get_item(db, item_id), "item_not_found", "item not found")
+    db.execute("BEGIN IMMEDIATE")
+    try:
+        db.execute("UPDATE items SET visibility=?,updated_at=? WHERE id=?", (visibility, now_ms(), item_id))
+        if visibility == "private":
+            db.execute("UPDATE notes SET visibility='private',updated_at=? WHERE id IN (SELECT note_id FROM note_items WHERE item_id=?)", (now_ms(), item_id))
+        db.execute("COMMIT")
+    except Exception:
+        db.execute("ROLLBACK")
+        raise
+    remaining = db.execute("SELECT COUNT(*) AS count FROM notes n JOIN note_items ni ON ni.note_id=n.id WHERE ni.item_id=? AND n.visibility='private'", (item_id,)).fetchone()["count"]
+    return {"item_id": item_id, "visibility": visibility, "private_note_count": remaining}
+
+
+def set_item_notes_public(db: sqlite3.Connection, item_id: int) -> dict:
+    item = _required_row(repo.get_item(db, item_id), "item_not_found", "item not found")
+    if item["visibility"] != "public":
+        raise AppError("private_item", "make the Item public before publishing its Notes", 409)
+    db.execute("BEGIN IMMEDIATE")
+    try:
+        candidates = db.execute("SELECT n.id FROM notes n JOIN note_items ni ON ni.note_id=n.id WHERE ni.item_id=? AND n.visibility='private'", (item_id,)).fetchall()
+        updated = 0
+        blocked: list[int] = []
+        for candidate in candidates:
+            private = db.execute("""SELECT 1 FROM note_items ni JOIN items i ON i.id=ni.item_id WHERE ni.note_id=? AND i.visibility='private'""", (candidate["id"],)).fetchone()
+            if private:
+                blocked.append(candidate["id"])
+            else:
+                db.execute("UPDATE notes SET visibility='public',updated_at=? WHERE id=?", (now_ms(), candidate["id"]))
+                updated += 1
+        db.execute("COMMIT")
+    except Exception:
+        db.execute("ROLLBACK")
+        raise
+    return {"item_id": item_id, "updated_count": updated, "blocked_note_ids": blocked, "blocked_count": len(blocked)}
+
+
+def create_category(db: sqlite3.Connection, name: str, parent_id: int) -> dict:
+    parent = _required_row(repo.get_category(db, parent_id), "category_not_found", "parent category not found")
+    if not parent["is_root"] or parent["parent_id"] is not None:
+        raise AppError("invalid_parent_category", "a category can only be a child of a root", 422)
+    name = normalize_text(name, 100, "name", allow_empty=False)
+    base = "custom-" + slugify(name)
+    code = base
+    suffix = 2
+    while db.execute("SELECT 1 FROM categories WHERE code=?", (code,)).fetchone():
+        code = f"{base}-{suffix}"; suffix += 1
+    stamp = now_ms()
+    cur = db.execute("INSERT INTO categories(code,name,parent_id,is_root,sort_order,created_at,updated_at) VALUES(?,?,?,0,0,?,?)", (code, name, parent_id, stamp, stamp))
+    return dict(_required_row(repo.get_category(db, cur.lastrowid), "category_not_found", "category not found"))
+
+
+def update_category(db: sqlite3.Connection, category_id: int, name: str) -> dict:
+    row = _required_row(repo.get_category(db, category_id), "category_not_found", "category not found")
+    if row["is_root"]:
+        raise AppError("root_category_immutable", "root categories cannot be changed", 409)
+    db.execute("UPDATE categories SET name=?,updated_at=? WHERE id=?", (normalize_text(name, 100, "name", allow_empty=False), now_ms(), category_id))
+    return dict(_required_row(repo.get_category(db, category_id), "category_not_found", "category not found"))
+
+
+def delete_category(db: sqlite3.Connection, category_id: int) -> None:
+    row = _required_row(repo.get_category(db, category_id), "category_not_found", "category not found")
+    if row["is_root"]:
+        raise AppError("root_category_immutable", "root categories cannot be deleted", 409)
+    used = db.execute("SELECT 1 FROM note_categories WHERE category_id=? UNION SELECT 1 FROM items WHERE category_id=?", (category_id, category_id)).fetchone()
+    if used:
+        raise AppError("category_in_use", "category is still used", 409)
+    db.execute("DELETE FROM categories WHERE id=?", (category_id,))
+
+
+def create_tag(db: sqlite3.Connection, payload: TagWrite) -> dict:
+    display = normalize_text(payload.name, 64, "name", allow_empty=False)
+    key = name_key(display)
+    if db.execute("SELECT 1 FROM tags WHERE name_key=?", (key,)).fetchone():
+        raise AppError("duplicate_tag", "tag name already exists", 409)
+    base = slugify(display); slug = base; suffix = 2
+    while db.execute("SELECT 1 FROM tags WHERE slug=?", (slug,)).fetchone():
+        slug = f"{base}-{suffix}"; suffix += 1
+    stamp = now_ms()
+    cur = db.execute("INSERT INTO tags(name,name_key,slug,created_at,updated_at) VALUES(?,?,?,?,?)", (display, key, slug, stamp, stamp))
+    return dict(_required_row(repo.get_tag(db, cur.lastrowid), "tag_not_found", "tag not found"))
+
+
+def update_tag(db: sqlite3.Connection, tag_id: int, payload: TagPatch) -> dict:
+    _required_row(repo.get_tag(db, tag_id), "tag_not_found", "tag not found")
+    display = normalize_text(payload.name, 64, "name", allow_empty=False)
+    key = name_key(display)
+    conflict = db.execute("SELECT 1 FROM tags WHERE name_key=? AND id<>?", (key, tag_id)).fetchone()
+    if conflict:
+        raise AppError("duplicate_tag", "tag name already exists", 409)
+    db.execute("UPDATE tags SET name=?,name_key=?,updated_at=? WHERE id=?", (display, key, now_ms(), tag_id))
+    return dict(_required_row(repo.get_tag(db, tag_id), "tag_not_found", "tag not found"))
+
+
+def delete_tag(db: sqlite3.Connection, tag_id: int) -> None:
+    _required_row(repo.get_tag(db, tag_id), "tag_not_found", "tag not found")
+    db.execute("DELETE FROM tags WHERE id=?", (tag_id,))
+
+
+def settings_dict(db: sqlite3.Connection, *, public: bool) -> dict:
+    row = repo.setting_row(db)
+    result = {"site_title": row["site_title"], "site_tagline": row["site_tagline"], "timezone": row["timezone"], "now_status": row["now_status"]}
+    if public:
+        result["about_html_sanitized"] = render_content(row["about_raw"], row["about_format"])
+    else:
+        result.update({"about_raw": row["about_raw"], "about_format": row["about_format"], "current_note_id": row["current_note_id"]})
+    return result
+
+
+def update_settings(db: sqlite3.Connection, payload: SettingsPatch) -> dict:
+    current = repo.setting_row(db)
+    data = payload.model_dump(exclude_unset=True)
+    if "timezone" in data:
+        validate_timezone(data["timezone"])
+    if "current_note_id" in data and data["current_note_id"] is not None:
+        _required_row(repo.get_note(db, data["current_note_id"]), "note_not_found", "current Note not found")
+    columns = ["site_title", "site_tagline", "timezone", "now_status", "about_raw", "about_format", "current_note_id"]
+    values = [data.get(column, current[column]) for column in columns]
+    db.execute("UPDATE settings SET site_title=?,site_tagline=?,timezone=?,now_status=?,about_raw=?,about_format=?,current_note_id=?,updated_at=? WHERE id=1", (*values, now_ms()))
+    return settings_dict(db, public=False)
