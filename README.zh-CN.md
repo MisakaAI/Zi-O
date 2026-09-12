@@ -43,9 +43,28 @@ npm --prefix frontend run build
 PYTHONPATH=backend .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-打开 `http://127.0.0.1:8000/now`。前端开发时，让 API 运行在 8000 端口并设置 `ZIO_PUBLIC_ORIGIN=http://127.0.0.1:5173`，然后运行 `npm --prefix frontend run dev`；Vite 会代理 `/api` 和 `/page`。
+打开 `http://127.0.0.1:8000/now`。
 
-前端界面默认使用简体中文，可通过顶栏的语言选择器切换 English；选择会保存在当前浏览器中。
+## 开发模式
+
+日常开发时使用 Vite 热更新，不需要在每次修改前端代码后运行 `npm --prefix frontend run build`。从仓库根目录打开两个终端，分别启动后端和前端。
+
+终端 1——启动 API，并允许 Vite 开发服务器发起请求：
+
+```sh
+export ZIO_PUBLIC_ORIGIN="http://127.0.0.1:5173"
+PYTHONPATH=backend .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+终端 2——启动 Vite：
+
+```sh
+npm --prefix frontend run dev
+```
+
+打开 `http://127.0.0.1:5173/now`。修改前端文件后，Vite 会自动更新页面，并将 `/api` 和 `/page` 代理到 8000 端口的后端；修改 Python 文件后，Uvicorn 的 `--reload` 会自动重启后端。只有通过 FastAPI 提供前端页面或进行最终验证前，才需要执行生产构建。
+
+前端界面默认使用简体中文，可通过顶栏的语言按钮切换 English；选择会保存在当前浏览器中。
 
 ## 运维
 

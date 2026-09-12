@@ -2,6 +2,7 @@ export const messages = {
   'zh-CN': {
     language: {
       label: '语言',
+      switch: '切换语言',
       chinese: '简体中文',
       english: 'English',
     },
@@ -244,6 +245,7 @@ export const messages = {
   'en-US': {
     language: {
       label: 'Language',
+      switch: 'Switch language',
       chinese: '简体中文',
       english: 'English',
     },
