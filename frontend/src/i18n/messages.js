@@ -67,7 +67,7 @@ export const messages = {
       BOOK: '书籍',
       MOVIE: '电影',
       GAME: '游戏',
-      CODE: '代码',
+      PROJECT: '项目',
     },
     about: {
       eyebrow: '关于 / ZI/O',
@@ -324,7 +324,7 @@ export const messages = {
       BOOK: 'Books',
       MOVIE: 'Movies',
       GAME: 'Games',
-      CODE: 'Code',
+      PROJECT: 'Project',
     },
     about: {
       eyebrow: 'ABOUT / ZI/O',

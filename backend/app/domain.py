@@ -13,7 +13,7 @@ METADATA_KEYS: dict[str, dict[str, type | tuple[type, ...]]] = {
     "BOOK": {"isbn": str, "publisher": str, "published_year": int, "page_count": int},
     "MOVIE": {"release_year": int, "runtime_minutes": int, "country": str},
     "GAME": {"release_year": int, "platform": str, "play_status": str},
-    "CODE": {"repository_url": str, "language": str, "project_status": str},
+    "PROJECT": {"repository_url": str, "language": str, "project_status": str},
 }
 
 

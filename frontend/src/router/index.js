@@ -16,7 +16,7 @@ export default createRouter({
   routes: [
     { path: '/', redirect: '/now' }, { path: '/now', component: NowView }, { path: '/log', component: LogView },
     { path: '/books', component: CategoryView, props: { code: 'BOOK' } }, { path: '/movies', component: CategoryView, props: { code: 'MOVIE' } },
-    { path: '/games', component: CategoryView, props: { code: 'GAME' } }, { path: '/code', component: CategoryView, props: { code: 'CODE' } },
+    { path: '/games', component: CategoryView, props: { code: 'GAME' } }, { path: '/projects', component: CategoryView, props: { code: 'PROJECT' } },
     { path: '/journal', component: CategoryView, props: { code: 'JOURNAL' } }, { path: '/items/:id(\\d+)/:slug?', component: ItemView },
     { path: '/n/:id(\\d+)', component: NoteView }, { path: '/tag/:slug', component: TagView }, { path: '/index', component: IndexView },
     { path: '/about', component: AboutView }, { path: '/manage/login', component: LoginView }, { path: '/manage/:section?', component: ManageView },

@@ -12,7 +12,7 @@ const { t, categoryLabel, errorKey } = useI18n()
 const localizedError = computed(() => error.value ? t(errorKey(error.value)) : '')
 
 function categoryRoute(category) {
-  const routes = { BOOK: '/books', MOVIE: '/movies', GAME: '/games', CODE: '/code', JOURNAL: '/journal' }
+  const routes = { BOOK: '/books', MOVIE: '/movies', GAME: '/games', PROJECT: '/projects', JOURNAL: '/journal' }
   return category.is_root ? (routes[category.code] || '/journal') : '/log'
 }
 

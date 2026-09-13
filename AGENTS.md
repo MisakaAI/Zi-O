@@ -18,7 +18,7 @@
 - `archive_no` 稳定、唯一、只增不改。
 - `content_raw` 是正文真源；`static_path` 可空，但不是内容格式。
 - Item chip 和普通 Tag 数据分离。
-- 根分类为 `JOURNAL / BOOK / MOVIE / GAME / CODE`；未选分类时以 JOURNAL 为主分类。
+- 根分类为 `JOURNAL / BOOK / MOVIE / GAME / PROJECT`；未选分类时以 JOURNAL 为主分类。
 - v0.1 只有 `public` 与 `private`。
 - Item 私密化必须在同一事务中私密化关联 Note；Item 公开化不得自动公开 Note。
 - 公共 Note 查询还必须排除任何关联私密 Item 的 Note，作为纵深防御。

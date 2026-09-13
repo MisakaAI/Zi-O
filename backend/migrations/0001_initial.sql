@@ -116,7 +116,6 @@ VALUES
   ('BOOK', 'Books', 1, 1, 0, 0),
   ('MOVIE', 'Movies', 1, 2, 0, 0),
   ('GAME', 'Games', 1, 3, 0, 0),
-  ('CODE', 'Code', 1, 4, 0, 0);
+  ('PROJECT', 'Project', 1, 4, 0, 0);
 
 INSERT INTO settings(id, updated_at) VALUES (1, 0);
-

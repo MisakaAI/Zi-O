@@ -32,6 +32,13 @@ class CoreTests(unittest.TestCase):
 
     def test_migration_and_archive_numbers(self):
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM categories WHERE is_root=1").fetchone()[0], 5)
+        project = self.db.execute("SELECT id, name FROM categories WHERE code='PROJECT'").fetchone()
+        self.assertEqual(project["name"], "Project")
+        item = content.create_item(
+            self.db,
+            ItemWrite(category_id=project["id"], title="ZI/O", metadata_json={"repository_url": "https://example.com/zio"}),
+        )
+        self.assertEqual(item["category_code"], "PROJECT")
         first = self.note(); second = self.note(started_at="2020-01-01T00:00:00Z")
         self.assertEqual((first["archive_no"], second["archive_no"]), (1, 2))
         self.db.execute("DELETE FROM notes WHERE id=?", (first["id"],))
