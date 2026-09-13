@@ -24,6 +24,7 @@ onMounted(loadSession)
       <nav :aria-label="t('nav.primary')">
         <RouterLink to="/now">{{ t('nav.now') }}</RouterLink>
         <RouterLink to="/log">{{ t('nav.log') }}</RouterLink>
+        <RouterLink v-if="displayName" to="/manage">{{ t('nav.manage') }}</RouterLink>
         <RouterLink to="/about">{{ t('nav.about') }}</RouterLink>
       </nav>
       <a class="github-link" href="https://github.com/MisakaAI/Zi-O" target="_blank" rel="noopener noreferrer" :aria-label="t('nav.github')" :title="t('nav.github')">

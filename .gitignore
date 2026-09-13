@@ -6,6 +6,7 @@ node_modules/
 frontend/dist/
 dist/
 data/*.sqlite3
+data/*.sqlite3-*
 data/*.sqlite
 data/*.db
 data/sessions/
@@ -18,4 +19,3 @@ data/static-pages/*
 !.env.example
 .DS_Store
 *.log
-
