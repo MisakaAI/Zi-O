@@ -2,7 +2,6 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RiArrowDropLeftLine, RiArrowDropRightLine } from '@remixicon/vue'
 import { get } from '../api/client'
-import StateMessage from './StateMessage.vue'
 import { useI18n } from '../i18n'
 
 const props = defineProps({
@@ -84,7 +83,8 @@ function buildCalendarDays(monthValue, dayCounts = {}, maxCountOverride = null) 
   const first = new Date(Date.UTC(parsed.year, parsed.monthIndex, 1))
   const daysInMonth = new Date(Date.UTC(parsed.year, parsed.monthIndex + 1, 0)).getUTCDate()
   const leadingDays = (first.getUTCDay() + 6) % 7
-  const totalDays = Math.ceil((leadingDays + daysInMonth) / 7) * 7
+  // 固定为六周，避免跨月、跨年时因行数变化引发整个页面重新排版。
+  const totalDays = 42
   const maxCount = maxCountOverride ?? Math.max(0, ...Object.values(dayCounts))
   return Array.from({ length: totalDays }, (_, index) => {
     const date = new Date(Date.UTC(parsed.year, parsed.monthIndex, index - leadingDays + 1))
@@ -93,7 +93,7 @@ function buildCalendarDays(monthValue, dayCounts = {}, maxCountOverride = null) 
     const count = isCurrentMonth ? dayCounts[dateKey] || 0 : 0
     const ratio = maxCount ? count / maxCount : 0
     const level = count === 0 ? 0 : maxCount === 1 || ratio >= .75 ? 4 : ratio >= .5 ? 3 : ratio >= .25 ? 2 : 1
-    return { date: dateKey, label: date.getUTCDate(), count, level, isCurrentMonth, isToday: isCurrentMonth && dateKey === todayKey.value }
+    return { slot: index, date: dateKey, label: date.getUTCDate(), count, level, isCurrentMonth, isToday: isCurrentMonth && dateKey === todayKey.value }
   })
 }
 
@@ -115,6 +115,7 @@ const yearCalendarMonths = computed(() => {
     const monthDate = new Date(Date.UTC(year, monthIndex, 15, 12))
     const monthDays = months[key] || {}
     return {
+      monthIndex,
       key,
       label: d(monthDate, { month: 'short' }, props.timezone),
       fullLabel: d(monthDate, { year: 'numeric', month: 'long' }, props.timezone),
@@ -309,19 +310,26 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeYearPickerOnO
           </div>
         </header>
 
-        <div v-if="yearCalendarError" class="calendar-year-status state-error" role="alert">
-          <span>{{ localizedYearError }}</span>
-          <button type="button" class="link-button" @click="loadYear(yearPickerYear)">{{ t('now.calendarRetry') }}</button>
-        </div>
-        <div v-else-if="yearCalendarLoading" class="calendar-year-status" role="status" aria-live="polite">
-          <span class="state-mark" aria-hidden="true">…</span>
-          <span>{{ t('now.calendarYearLoading') }}</span>
+        <div
+          class="calendar-year-status"
+          :class="{ 'state-error': yearCalendarError }"
+          :role="yearCalendarError ? 'alert' : yearCalendarLoading ? 'status' : undefined"
+          :aria-live="yearCalendarLoading ? 'polite' : undefined"
+        >
+          <template v-if="yearCalendarError">
+            <span>{{ localizedYearError }}</span>
+            <button type="button" class="link-button" @click="loadYear(yearPickerYear)">{{ t('now.calendarRetry') }}</button>
+          </template>
+          <template v-else-if="yearCalendarLoading">
+            <span class="state-mark" aria-hidden="true">…</span>
+            <span>{{ t('now.calendarYearLoading') }}</span>
+          </template>
         </div>
 
         <div class="calendar-year-grid">
           <section
             v-for="monthOption in yearCalendarMonths"
-            :key="monthOption.key"
+            :key="monthOption.monthIndex"
             class="calendar-year-month-card"
             :class="{ 'calendar-year-month-card-shown': monthOption.isShown, 'calendar-year-month-card-current': monthOption.isCurrent }"
             :aria-label="monthOption.fullLabel"
@@ -343,7 +351,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeYearPickerOnO
             <div class="calendar-year-days" role="grid" :aria-label="monthOption.fullLabel">
               <span
                 v-for="day in monthOption.days"
-                :key="day.date"
+                :key="day.slot"
                 class="calendar-year-day"
                 :class="[
                   day.isCurrentMonth ? 'calendar-year-day-current' : 'calendar-year-day-outside',
@@ -362,35 +370,40 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeYearPickerOnO
       </section>
     </div>
 
-    <StateMessage v-if="loading" type="loading" :message="t('now.calendarLoading')" />
-    <StateMessage v-else-if="error" type="error" :message="localizedError" />
-    <template v-else>
-      <div class="calendar-weekdays" aria-hidden="true">
-        <span v-for="weekday in weekdayLabels" :key="weekday" class="calendar-weekday mono">{{ weekday }}</span>
+    <div class="calendar-weekdays" aria-hidden="true">
+      <span v-for="weekday in weekdayLabels" :key="weekday" class="calendar-weekday mono">{{ weekday }}</span>
+    </div>
+    <div class="calendar-grid" role="grid" :aria-labelledby="`calendar-title-${month}`">
+      <div
+        v-for="day in calendarDays"
+        :key="day.slot"
+        class="calendar-day"
+        :class="[
+          day.isCurrentMonth ? 'calendar-day-current' : 'calendar-day-outside',
+          day.level ? `calendar-day-level-${day.level}` : '',
+          { 'calendar-day-today': day.isToday },
+        ]"
+        role="gridcell"
+        :aria-label="dayLabel(day)"
+        :title="dayLabel(day)"
+      >
+        <time :datetime="day.date">{{ day.label }}</time>
+        <span v-if="day.count" class="calendar-day-count mono" aria-hidden="true">{{ day.count > 99 ? '99+' : day.count }}</span>
       </div>
-      <div class="calendar-grid" role="grid" :aria-labelledby="`calendar-title-${month}`">
-        <div
-          v-for="day in calendarDays"
-          :key="day.date"
-          class="calendar-day"
-          :class="[
-            day.isCurrentMonth ? 'calendar-day-current' : 'calendar-day-outside',
-            day.level ? `calendar-day-level-${day.level}` : '',
-            { 'calendar-day-today': day.isToday },
-          ]"
-          role="gridcell"
-          :aria-label="dayLabel(day)"
-          :title="dayLabel(day)"
-        >
-          <time :datetime="day.date">{{ day.label }}</time>
-          <span v-if="day.count" class="calendar-day-count mono" aria-hidden="true">{{ day.count > 99 ? '99+' : day.count }}</span>
-        </div>
-      </div>
-      <div class="calendar-meta muted">
-        <span class="calendar-legend-mark" aria-hidden="true"></span>
-        <span v-if="monthEventCount">{{ t('now.calendarSummary', { days: activeDayCount, count: monthEventCount }) }}</span>
-        <span v-else>{{ t('now.calendarNoEvents') }}</span>
-      </div>
-    </template>
+    </div>
+    <div
+      class="calendar-meta muted"
+      :class="{ 'state-error': error }"
+      :role="error ? 'alert' : loading ? 'status' : undefined"
+      :aria-live="loading ? 'polite' : undefined"
+    >
+      <span v-if="loading" class="state-mark" aria-hidden="true">…</span>
+      <span v-else-if="error" class="state-mark" aria-hidden="true">!</span>
+      <span v-else class="calendar-legend-mark" aria-hidden="true"></span>
+      <span v-if="loading">{{ t('now.calendarLoading') }}</span>
+      <span v-else-if="error">{{ localizedError }}</span>
+      <span v-else-if="monthEventCount">{{ t('now.calendarSummary', { days: activeDayCount, count: monthEventCount }) }}</span>
+      <span v-else>{{ t('now.calendarNoEvents') }}</span>
+    </div>
   </section>
 </template>

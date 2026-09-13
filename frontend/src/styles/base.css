@@ -48,7 +48,7 @@ h3 { margin:.45rem 0; line-height:1.25; }
 .calendar-year-value { margin:0; color:var(--text); font-size:clamp(1.25rem,3vw,2rem); line-height:1; letter-spacing:-.04em; }
 .calendar-year-controls { display:flex; align-items:center; gap:.2rem; }
 .calendar-year-current { min-width:4.2rem; }
-.calendar-year-status { display:flex; align-items:center; gap:.6rem; margin:-.5rem 0 1rem; font-size:.7rem; }
+.calendar-year-status { display:flex; align-items:center; gap:.6rem; min-height:1.15rem; margin:-.5rem 0 1rem; font-size:.7rem; }
 .calendar-year-status .link-button { margin-left:auto; color:var(--signal); font:.68rem ui-monospace,monospace; }
 .calendar-year-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:1rem; align-items:stretch; }
 .calendar-year-month-card { min-width:0; padding:.85rem; background:var(--bg); border:1px solid var(--line); border-radius:7px; }
@@ -58,6 +58,7 @@ h3 { margin:.45rem 0; line-height:1.25; }
 .calendar-year-month-title:hover,.calendar-year-month-title:focus-visible,.calendar-year-month-title-shown { color:var(--signal); }
 .calendar-year-month-marker { width:.32rem; height:.32rem; flex:none; border-radius:50%; background:var(--signal); }
 .calendar-year-weekdays,.calendar-year-days { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:.28rem; }
+.calendar-year-days { grid-template-rows:repeat(6,minmax(0,1fr)); }
 .calendar-year-weekdays { margin:.75rem 0 .35rem; }
 .calendar-year-weekday { color:var(--muted); font-size:.52rem; text-align:center; opacity:.7; }
 .calendar-year-day { display:grid; place-items:center; min-width:0; aspect-ratio:1; border:1px solid transparent; border-radius:3px; background:rgba(255,255,255,.025); color:var(--muted); font-size:.62rem; line-height:1; }
@@ -72,7 +73,7 @@ h3 { margin:.45rem 0; line-height:1.25; }
 .calendar-weekdays,.calendar-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:.25rem; }
 .calendar-weekdays { padding:.7rem 0 .35rem; }
 .calendar-weekday { color:var(--muted); font-size:.58rem; text-align:center; opacity:.75; }
-.calendar-grid { min-width:0; }
+.calendar-grid { min-width:0; grid-template-rows:repeat(6,minmax(0,1fr)); }
 .calendar-day { position:relative; display:grid; place-items:center; min-width:0; aspect-ratio:1; border:1px solid transparent; color:var(--muted); font-size:.74rem; }
 .calendar-day time { display:grid; place-items:center; width:100%; height:100%; border-radius:2px; }
 .calendar-day-current { color:var(--text); }
