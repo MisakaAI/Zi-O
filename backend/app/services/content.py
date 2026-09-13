@@ -104,8 +104,7 @@ def note_dict(db: sqlite3.Connection, row: sqlite3.Row, *, include_raw: bool) ->
         "archive_no": row["archive_no"],
         "archive_label": f"LOG/{row['archive_no']:06d}",
         "title": row["title"],
-        "content_format": row["content_format"],
-        "content_html_sanitized": render_content(row["content_raw"], row["content_format"]),
+        "content_html_sanitized": render_content(row["content_raw"]),
         "started_at": iso_utc(row["started_at"]),
         "ended_at": iso_utc(row["ended_at"]),
         "visibility": row["visibility"],
@@ -178,9 +177,9 @@ def create_note(db: sqlite3.Connection, payload: NoteWrite) -> dict:
         db.execute("UPDATE counters SET value=value+1 WHERE name='archive_no'")
         archive_no = db.execute("SELECT value FROM counters WHERE name='archive_no'").fetchone()["value"]
         cursor = db.execute(
-            """INSERT INTO notes(archive_no,title,content_raw,content_format,started_at,ended_at,visibility,static_path,created_at,updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (archive_no, title, content, payload.content_format, started, ended, payload.visibility, static_path, timestamp, timestamp),
+            """INSERT INTO notes(archive_no,title,content_raw,started_at,ended_at,visibility,static_path,created_at,updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (archive_no, title, content, started, ended, payload.visibility, static_path, timestamp, timestamp),
         )
         note_id = cursor.lastrowid
         _replace_note_links(db, note_id, categories, items, tags)
@@ -212,13 +211,12 @@ def update_note(db: sqlite3.Connection, note_id: int, payload: NotePatch) -> dic
     values = {
         "title": normalize_text(data["title"], 200, "title") if "title" in data else current["title"],
         "content_raw": normalize_text(data["content_raw"], 1_048_576, "content_raw") if "content_raw" in data else current["content_raw"],
-        "content_format": data.get("content_format", current["content_format"]),
         "started_at": started, "ended_at": ended, "visibility": visibility, "static_path": static_path, "updated_at": now_ms(),
     }
     db.execute("BEGIN IMMEDIATE")
     try:
         db.execute(
-            """UPDATE notes SET title=?,content_raw=?,content_format=?,started_at=?,ended_at=?,visibility=?,static_path=?,updated_at=? WHERE id=?""",
+            """UPDATE notes SET title=?,content_raw=?,started_at=?,ended_at=?,visibility=?,static_path=?,updated_at=? WHERE id=?""",
             (*values.values(), note_id),
         )
         if categories is not None or items is not None or tags is not None:

@@ -202,8 +202,9 @@ Note 是核心时间事件。`archive_no` 由独立计数器分配，只增不�
                          +--> otherwise              --> blocked list
 ```
 
-Note 和 About 正文始终保存原始内容；返回公共页面前，Markdown 先渲染为 HTML，HTML
-再由 `nh3` 白名单清理。前端的 `v-html` 只使用命名为 `*_html_sanitized` 的字段。
+Note 正文统一保存 Tiptap 生成的 HTML；About 仍保存可选的 Markdown/HTML 原文。返回公共
+页面前统一由 `nh3` 白名单清理，About 的 Markdown 会先渲染为 HTML。前端的 `v-html`
+只使用命名为 `*_html_sanitized` 的字段。
 
 ## 7. 数据关系
 
@@ -270,4 +271,3 @@ Note 和 About 正文始终保存原始内容；返回公共页面前，Markdown
 
 主要配置包括数据库路径、静态页根目录、海报根目录、前端构建目录、公开 Origin、
 session 密钥、站点时区以及生产 Cookie 策略。配置读取集中在 `backend/app/config.py`。
-

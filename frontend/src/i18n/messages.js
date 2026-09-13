@@ -179,7 +179,6 @@ export const messages = {
         "progress": "进度",
         "tags": "标签",
         "staticHtmlPath": "独立页面路径",
-        "format": "格式",
         "visibility": "可见性",
         "content": "正文",
         "category": "分类",
@@ -196,6 +195,23 @@ export const messages = {
         "aboutFormat": "介绍格式",
         "about": "站点介绍",
         "currentNoteId": "当前展示的记录 ID"
+      },
+      "toolbar": {
+        "label": "富文本工具栏",
+        "paragraph": "正文段落",
+        "heading2": "二级标题",
+        "heading3": "三级标题",
+        "bold": "粗体",
+        "italic": "斜体",
+        "strike": "删除线",
+        "inlineCode": "行内代码",
+        "bulletList": "无序列表",
+        "orderedList": "有序列表",
+        "quote": "引用",
+        "codeBlock": "代码块",
+        "horizontalRule": "分隔线",
+        "undo": "撤销",
+        "redo": "重做"
       },
       "buttons": {
         "updateNote": "保存修改",
@@ -232,7 +248,6 @@ export const messages = {
         "metadataInvalid": "元数据必须是有效的 JSON。",
         "posterUploadFailed": "海报上传失败。"
       },
-      "contentPlaceholder": "写下发生的事，或此刻的想法…",
       "titlePlaceholder": "为这段经历起个名字",
       "properties": "记录属性",
       "links": "关联档案与标签",
@@ -468,7 +483,6 @@ export const messages = {
         "progress": "Progress",
         "tags": "Tags",
         "staticHtmlPath": "Standalone page path",
-        "format": "Format",
         "visibility": "Visibility",
         "content": "Content",
         "category": "Category",
@@ -485,6 +499,23 @@ export const messages = {
         "aboutFormat": "About format",
         "about": "About",
         "currentNoteId": "Featured note ID"
+      },
+      "toolbar": {
+        "label": "Rich text toolbar",
+        "paragraph": "Paragraph",
+        "heading2": "Heading 2",
+        "heading3": "Heading 3",
+        "bold": "Bold",
+        "italic": "Italic",
+        "strike": "Strikethrough",
+        "inlineCode": "Inline code",
+        "bulletList": "Bullet list",
+        "orderedList": "Ordered list",
+        "quote": "Block quote",
+        "codeBlock": "Code block",
+        "horizontalRule": "Horizontal rule",
+        "undo": "Undo",
+        "redo": "Redo"
       },
       "buttons": {
         "updateNote": "Save changes",
@@ -521,7 +552,6 @@ export const messages = {
         "metadataInvalid": "Metadata must be valid JSON.",
         "posterUploadFailed": "Poster upload failed."
       },
-      "contentPlaceholder": "What happened? What’s on your mind?",
       "titlePlaceholder": "Give this moment a title",
       "properties": "Note details",
       "links": "Items & tags",

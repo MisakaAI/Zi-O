@@ -29,7 +29,10 @@ def clean_html(value: str) -> str:
     )
 
 
-def render_content(raw: str, content_format: str) -> str:
+def render_content(raw: str, content_format: str | None = None) -> str:
+    """清理正文 HTML；content_format 仅供仍支持 Markdown 的 About 使用。"""
+    if content_format is None:
+        return clean_html(raw)
     if content_format == "markdown":
         return clean_html(_MARKDOWN.render(raw))
     if content_format == "html":

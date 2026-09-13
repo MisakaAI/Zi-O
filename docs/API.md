@@ -39,7 +39,6 @@ Note 对公共接口可见必须同时满足 `notes.visibility='public'` 且所�
 {
   "title":"",
   "content_raw":"",
-  "content_format":"markdown",
   "started_at":"2024-01-01T00:00:00Z",
   "ended_at":null,
   "visibility":"private",
@@ -62,4 +61,4 @@ Note 对公共接口可见必须同时满足 `notes.visibility='public'` 且所�
 
 ## 渲染与静态页面
 
-Markdown 由 `markdown-it-py` 渲染，Markdown 输出和 HTML 输入均由 `nh3` 清理。公共响应只暴露 `content_html_sanitized`；管理响应可以额外暴露 `content_raw`。静态页面绝不会以目录形式挂载，只有在完成 Note/Item 鉴权和路径校验后才会提供。
+Note 的 `content_raw` 统一保存 Tiptap 生成的 HTML，并由 `nh3` 清理后输出。公共响应只暴露 `content_html_sanitized`；管理响应可以额外暴露 `content_raw`。About 仍可使用 Markdown 或 HTML，并经过相同的清理边界。静态页面绝不会以目录形式挂载，只有在完成 Note/Item 鉴权和路径校验后才会提供。

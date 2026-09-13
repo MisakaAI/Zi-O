@@ -28,7 +28,7 @@
 
 - 前端：Vue 3 Composition API、SFC、Vue Router、Vite。
 - 后端：Python 3、FastAPI、标准库 `sqlite3`。
-- 已批准依赖仅包括：Vue、Vue Router、Vite、FastAPI、`uvicorn`、`markdown-it-py`、`nh3`。
+- 已批准依赖仅包括：Vue、Vue Router、Vite、Tiptap（`@tiptap/vue-3`、`@tiptap/pm`、`@tiptap/starter-kit`）、FastAPI、`uvicorn`、`markdown-it-py`、`nh3`。
 - 除以上项目外，加入任何第三方 Python/npm 依赖前必须获得用户明确批准。
 - 禁止自行引入 ORM、Alembic、JWT 包、Axios、Pinia、Tailwind、UI 框架、日期库、图标库、masonry 或测试框架。
 - 优先使用标准库、浏览器原生 API、`fetch`、原生 CSS 和 CSS Grid。
@@ -51,7 +51,7 @@
 
 - 密码使用带盐 PBKDF2；session token 使用 `secrets` 生成，数据库只存哈希。
 - session Cookie 为 HttpOnly、SameSite=Lax；生产环境 Secure；写请求执行同源检查。
-- Markdown 经 `markdown-it-py` 渲染后必须用 `nh3` 清理；原始 HTML 也必须清理。
+- Note 的 HTML 富文本必须用 `nh3` 清理后再返回；About 的 Markdown/HTML 也遵循相同的清理边界。
 - 任何传入前端 `v-html` 的值都必须来自后端已清理字段，并在命名上体现其已清理。
 - `static_path` 仅接受静态根目录中的相对 HTML 文件。解析后验证仍在根目录内，拒绝符号链接逃逸和路径穿越。
 - 静态目录不得公开 mount；`/page/{note_id}` 必须先查 Note 和关联 Item 权限。

@@ -33,6 +33,8 @@ class CoreTests(unittest.TestCase):
 
     def test_migration_and_archive_numbers(self):
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM categories WHERE is_root=1").fetchone()[0], 5)
+        note_columns = {row["name"] for row in self.db.execute("PRAGMA table_info(notes)")}
+        self.assertNotIn("content_format", note_columns)
         project = self.db.execute("SELECT id, name FROM categories WHERE code='PROJECT'").fetchone()
         self.assertEqual(project["name"], "Project")
         item = content.create_item(
@@ -47,7 +49,7 @@ class CoreTests(unittest.TestCase):
         third = self.note()
         self.assertEqual(third["archive_no"], 3)
         migrate(self.root / "test.sqlite3", Path(__file__).parents[1] / "migrations")
-        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM schema_version").fetchone()[0], 1)
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM schema_version").fetchone()[0], 2)
         with self.assertRaises(__import__("sqlite3").IntegrityError):
             self.db.execute("INSERT INTO note_items(note_id,item_id) VALUES(999,999)")
 
@@ -110,10 +112,17 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, "private_item_link")
 
     def test_rendering_removes_xss(self):
-        html = render_content('<script>alert(1)</script><img src=x onerror=alert(1)><a href="javascript:bad()">x</a>', "html")
+        html = render_content('<script>alert(1)</script><img src=x onerror=alert(1)><a href="javascript:bad()">x</a>')
         self.assertNotIn("script", html.lower())
         self.assertNotIn("onerror", html.lower())
         self.assertNotIn("javascript:", html.lower())
+
+    def test_note_content_is_unified_sanitized_html(self):
+        note = self.note(content_raw="<h2>Rich text</h2><p><strong>safe</strong><iframe src='https://example.com'></iframe></p>")
+        self.assertEqual(note["content_raw"], "<h2>Rich text</h2><p><strong>safe</strong><iframe src='https://example.com'></iframe></p>")
+        self.assertNotIn("content_format", note)
+        self.assertIn("<strong>safe</strong>", note["content_html_sanitized"])
+        self.assertNotIn("iframe", note["content_html_sanitized"])
 
     def test_tag_slug_conflict(self):
         first = content.create_tag(self.db, TagWrite(name="Read later"))

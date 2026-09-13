@@ -34,9 +34,19 @@
 .note-editor-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(250px, 1fr); gap: 2rem; }
 .editor-writing, .editor-properties { display: grid; align-content: start; gap: 1.2rem; min-width: 0; }
 .editor-properties { border-left: 1px solid var(--line); padding-left: 2rem; }
-.editor-writing .content-field { flex: 1; }
-.editor-writing textarea { min-height: 350px; font-family: var(--mono); font-size: .85rem; }
 .editor-writing input { font-size: 1.05rem; }
+.rich-text-field { display: grid; min-width: 0; }
+.field-label { margin-bottom: .4rem; color: var(--muted); font-size: .7rem; letter-spacing: .05em; }
+.rich-text-toolbar { display: flex; flex-wrap: wrap; gap: .3rem; padding: .45rem; background: var(--surface-2); border: 1px solid var(--line); border-bottom: 0; border-radius: 5px 5px 0 0; }
+.rich-text-toolbar button { min-width: 2rem; min-height: 2rem; padding: .2rem .45rem; border: 1px solid transparent; border-radius: 3px; background: transparent; color: var(--muted); font: .72rem/1 var(--mono); }
+.rich-text-toolbar button:hover { border-color: var(--line); color: var(--text); }
+.rich-text-toolbar button.active { border-color: #80516a; background: #291d25; color: var(--text); }
+.toolbar-spacer { flex: 1; min-width: .5rem; }
+.rich-text-editor { min-height: 430px; border: 1px solid var(--line); border-radius: 0 0 5px 5px; background: var(--bg); }
+.rich-text-editor:focus-within { border-color: var(--signal); box-shadow: 0 0 0 1px var(--signal); }
+.rich-text-surface { min-height: 428px; padding: 1rem; outline: none; }
+.rich-text-surface p { margin: 0 0 1rem; }
+.rich-text-surface > :last-child { margin-bottom: 0; }
 .field-pair { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
 .field-help { color: var(--muted); font-size: .72rem; margin: 0; }
 .editor-disclosure { border-top: 1px solid var(--line); padding-top: .9rem; }
@@ -75,7 +85,7 @@
   .manage-grid, .note-editor-grid { grid-template-columns: 1fr; }
   .editor-card { padding: 1.25rem; }
   .editor-properties { border-left: 0; border-top: 1px solid var(--line); padding: 1.3rem 0 0; }
-  .editor-writing textarea { min-height: 300px; }
+  .rich-text-editor, .rich-text-surface { min-height: 300px; }
   .manage-tabs { width: 100%; }
   .manage-tabs button { flex: 1; padding: .6rem .8rem; }
   .editor-actions .field-help { margin-left: 0; width: 100%; }

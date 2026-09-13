@@ -15,7 +15,7 @@ ZI/O 将笔记、阅读、观影、游戏、项目和日记组织到同一条时
 - 每条事件拥有真实发生时间，而不是只按录入时间排序。
 - 图书、电影、游戏、项目等作为可长期积累的 Item，与多条 Note 关联。
 - 私密数据在 API、页面和静态网页入口处均不可泄露。
-- Markdown、HTML 和受保护的静态网页三种阅读方式可用。
+- 统一 HTML 富文本和受保护的静态网页两种阅读方式可用。
 - 形成原创、克制、可访问的 Temporal Interface。
 
 ## 2. 非目标（v0.1 不做）
@@ -70,8 +70,7 @@ Note 是系统的核心事件，可仅有标题和时间，也可包含长篇正
 - `id`
 - `archive_no`：稳定、唯一、只增不改的档案编号，显示为 `LOG/000001`
 - `title`：允许为空时，应由界面提供可理解的摘要占位
-- `content_raw`：Markdown 或 HTML 原文，可空
-- `content_format`：`markdown | html`
+- `content_raw`：HTML 富文本原文，可空，是正文真源
 - `started_at`：UTC Unix milliseconds，默认当前时间
 - `ended_at`：UTC Unix milliseconds，可空，且不得早于 `started_at`
 - `visibility`：`public | private`
@@ -146,17 +145,17 @@ Note 与 Item 是多对多关系，推荐使用：
 
 ## 5. 内容渲染与静态网页
 
-### 5.1 Markdown / HTML
+### 5.1 HTML 富文本
 
 - 数据库始终保存 `content_raw`，渲染结果不是唯一真源。
-- Markdown 使用 `markdown-it-py` 渲染。
-- Markdown 生成的 HTML 和用户输入的 HTML 均必须经过 `nh3` 白名单清理后再返回前端。
+- Note 不再区分 Markdown 与 HTML 格式；管理端使用开源版 Tiptap 编辑并提交 HTML。
+- HTML 必须经过 `nh3` 白名单清理后再返回前端。
 - 默认禁止脚本、事件处理属性、危险 URL scheme 和可触发跨站内容的标签/属性。
 - 前端不得用未清理的数据调用 `v-html`。
 
 ### 5.2 静态网页高级模式
 
-- `static_path` 不是第三种 `content_format`，而是 Note 的可选跳转目标。
+- `static_path` 不是正文格式，而是 Note 的可选跳转目标。
 - 有 `static_path` 时，点击 Note 导航到 `/page/{note_id}`；否则进入 `/n/{note_id}`。
 - 静态页面目录不可由 Web Server 直接公开挂载。
 - FastAPI 必须先执行与 Note 详情相同的权限判断，再读取文件。
@@ -288,7 +287,7 @@ URL 以稳定 ID 为主，slug 仅用于可读性，标题修改后仍可访问�
 ### 9.2 已批准第三方依赖
 
 - 栈内依赖：Vue 3、Vue Router、Vite、FastAPI。
-- 本次新增批准：`uvicorn`、`markdown-it-py`、`nh3`。
+- 本次新增批准：`uvicorn`、`markdown-it-py`、`nh3`、`@tiptap/vue-3`、`@tiptap/pm`、`@tiptap/starter-kit`。
 
 除此以外，任何非标准库、npm 包或 Python 包，在加入前必须先获得用户确认。不得顺手加入 Pinia、Axios、Tailwind、组件库、日期库、ORM、迁移框架或测试框架。
 
@@ -335,7 +334,7 @@ docs/
 4. 管理员可完整 CRUD Note 与 Item，并管理分类、标签和关联上下文。
 5. LOG 严格按事件时间和 ID 稳定排序，按日期分组，cursor 不重不漏。
 6. NOW 显示当前时间、当前/最近 signal，且无持续干扰动画。
-7. Markdown 和 HTML 均能渲染；常见 XSS payload 不会执行。
+7. Tiptap HTML 富文本可编辑和渲染；常见 XSS payload 不会执行。
 8. 私密 Note 不出现在任何公共 API/页面；关联私密 Item 的 Note 即使状态异常也不会公开。
 9. Item 私密化会事务性私密化关联 Note；再次公开 Item 不会隐式公开 Note。
 10. 静态页面必须通过 `/page/{note_id}` 权限检查；路径穿越、符号链接逃逸、私密访问和缺失文件均被拒绝。
@@ -351,7 +350,7 @@ docs/
 
 1. 项目骨架、配置、迁移、领域模型与认证。
 2. Note/Item/Category/Tag 管理 API 与隐私规则。
-3. 公共 API、Markdown/HTML 渲染与静态页安全入口。
+3. 公共 API、HTML 富文本清理与静态页安全入口。
 4. Vue 路由、基础视觉 token、NOW 与 LOG。
 5. Item/Tag/管理页面、响应式与无障碍状态。
 6. 测试、构建、systemd、备份恢复和 README。

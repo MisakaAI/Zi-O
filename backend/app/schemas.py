@@ -28,7 +28,6 @@ class ItemLink(StrictModel):
 class NoteWrite(StrictModel):
     title: str = Field(default="", max_length=200)
     content_raw: str = Field(default="", max_length=1_048_576)
-    content_format: Literal["markdown", "html"] = "markdown"
     started_at: str | int | float | None = None
     ended_at: str | int | float | None = None
     visibility: Literal["public", "private"] = "private"
@@ -41,7 +40,6 @@ class NoteWrite(StrictModel):
 class NotePatch(StrictModel):
     title: str | None = Field(default=None, max_length=200)
     content_raw: str | None = Field(default=None, max_length=1_048_576)
-    content_format: Literal["markdown", "html"] | None = None
     started_at: str | int | float | None = None
     ended_at: str | int | float | None = None
     visibility: Literal["public", "private"] | None = None
