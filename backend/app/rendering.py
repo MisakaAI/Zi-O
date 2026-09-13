@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from markdown_it import MarkdownIt
 import nh3
+from markdown_it import MarkdownIt
 
 _MARKDOWN = MarkdownIt("commonmark", {"html": True, "linkify": False, "typographer": False})
 _ALLOWED_TAGS = {

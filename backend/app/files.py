@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import os
+from contextlib import suppress
 from pathlib import Path
 
 from .errors import AppError
@@ -59,7 +59,5 @@ def safe_remove(root: Path, relative: str | None) -> None:
         path = resolve_cover(root, relative)
     except AppError:
         return
-    try:
+    with suppress(FileNotFoundError):
         path.unlink()
-    except FileNotFoundError:
-        pass

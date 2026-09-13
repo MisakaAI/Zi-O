@@ -2,14 +2,22 @@ from __future__ import annotations
 
 import json
 import sqlite3
-import uuid
-from typing import Iterable
 
 from ..domain import name_key, normalize_text, slugify, validate_metadata, validate_static_path, validate_timezone
 from ..errors import AppError
-from ..repositories import content as repo
 from ..rendering import render_content
-from ..schemas import CategoryLink, ItemLink, ItemPatch, ItemWrite, NotePatch, NoteWrite, SettingsPatch, TagPatch, TagWrite
+from ..repositories import content as repo
+from ..schemas import (
+    CategoryLink,
+    ItemLink,
+    ItemPatch,
+    ItemWrite,
+    NotePatch,
+    NoteWrite,
+    SettingsPatch,
+    TagPatch,
+    TagWrite,
+)
 from ..timeutil import iso_utc, local_date_key, local_month_bounds, now_ms, parse_utc_ms
 
 
@@ -270,7 +278,7 @@ def delete_item(db: sqlite3.Connection, item_id: int) -> str | None:
 
 
 def change_item_visibility(db: sqlite3.Connection, item_id: int, visibility: str) -> dict:
-    row = _required_row(repo.get_item(db, item_id), "item_not_found", "item not found")
+    _required_row(repo.get_item(db, item_id), "item_not_found", "item not found")
     db.execute("BEGIN IMMEDIATE")
     try:
         db.execute("UPDATE items SET visibility=?,updated_at=? WHERE id=?", (visibility, now_ms(), item_id))
@@ -316,7 +324,8 @@ def create_category(db: sqlite3.Connection, name: str, parent_id: int) -> dict:
     code = base
     suffix = 2
     while db.execute("SELECT 1 FROM categories WHERE code=?", (code,)).fetchone():
-        code = f"{base}-{suffix}"; suffix += 1
+        code = f"{base}-{suffix}"
+        suffix += 1
     stamp = now_ms()
     cur = db.execute("INSERT INTO categories(code,name,parent_id,is_root,sort_order,created_at,updated_at) VALUES(?,?,?,0,0,?,?)", (code, name, parent_id, stamp, stamp))
     return dict(_required_row(repo.get_category(db, cur.lastrowid), "category_not_found", "category not found"))
@@ -345,9 +354,12 @@ def create_tag(db: sqlite3.Connection, payload: TagWrite) -> dict:
     key = name_key(display)
     if db.execute("SELECT 1 FROM tags WHERE name_key=?", (key,)).fetchone():
         raise AppError("duplicate_tag", "tag name already exists", 409)
-    base = slugify(display); slug = base; suffix = 2
+    base = slugify(display)
+    slug = base
+    suffix = 2
     while db.execute("SELECT 1 FROM tags WHERE slug=?", (slug,)).fetchone():
-        slug = f"{base}-{suffix}"; suffix += 1
+        slug = f"{base}-{suffix}"
+        suffix += 1
     stamp = now_ms()
     cur = db.execute("INSERT INTO tags(name,name_key,slug,created_at,updated_at) VALUES(?,?,?,?,?)", (display, key, slug, stamp, stamp))
     return dict(_required_row(repo.get_tag(db, cur.lastrowid), "tag_not_found", "tag not found"))

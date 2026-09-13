@@ -1,5 +1,5 @@
+# 兼容旧部署流程；依赖真源为仓库根目录的 pyproject.toml 和 uv.lock。
 fastapi
 uvicorn
 markdown-it-py
 nh3
-

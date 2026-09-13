@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from fastapi import Request
 
 from .config import Settings
-from .timeutil import now_ms
 
 PBKDF2_ITERATIONS = 600_000
 SESSION_TOKEN_BYTES = 32

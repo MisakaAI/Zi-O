@@ -4,8 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from app.errors import AppError
 from app.api.public import _cursor_scope
+from app.errors import AppError
 from app.files import resolve_static
 from app.security import make_cursor, read_cursor
 
@@ -22,9 +22,13 @@ class SecurityTests(unittest.TestCase):
 
     def test_static_path_rejects_traversal_symlink_and_non_html(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "pages"; root.mkdir(); (root / "ok.html").write_text("<h1>ok</h1>")
-            outside = Path(tmp) / "outside.html"; outside.write_text("secret")
+            root = Path(tmp) / "pages"
+            root.mkdir()
+            (root / "ok.html").write_text("<h1>ok</h1>")
+            outside = Path(tmp) / "outside.html"
+            outside.write_text("secret")
             (root / "link.html").symlink_to(outside)
             self.assertEqual(resolve_static(root, "ok.html", 1024).name, "ok.html")
             for path in ("../outside.html", "foo/../ok.html", "foo/./ok.html", "/tmp/out.html", "link.html", "ok.txt", "missing.html"):
-                with self.assertRaises(AppError): resolve_static(root, path, 1024)
+                with self.assertRaises(AppError):
+                    resolve_static(root, path, 1024)

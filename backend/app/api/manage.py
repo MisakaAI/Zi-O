@@ -8,7 +8,18 @@ from fastapi.responses import FileResponse
 from ..errors import AppError
 from ..files import resolve_cover, safe_remove
 from ..repositories import content as repo
-from ..schemas import CategoryPatch, CategoryWrite, ItemPatch, ItemWrite, NotePatch, NoteWrite, SettingsPatch, TagPatch, TagWrite, VisibilityRequest
+from ..schemas import (
+    CategoryPatch,
+    CategoryWrite,
+    ItemPatch,
+    ItemWrite,
+    NotePatch,
+    NoteWrite,
+    SettingsPatch,
+    TagPatch,
+    TagWrite,
+    VisibilityRequest,
+)
 from ..security import make_cursor, read_cursor
 from ..services import content as service
 from ..services.auth import public_user
@@ -159,7 +170,7 @@ async def upload_poster(item_id: int, request: Request, db=Depends(get_db)):
         chunks.append(chunk)
     body = b"".join(chunks)
     signature, extension = accepted[content_type]
-    if not body.startswith(signature) or (content_type == "image/webp" and len(body) < 12 or (content_type == "image/webp" and body[8:12] != b"WEBP")):
+    if not body.startswith(signature) or ((content_type == "image/webp" and len(body) < 12) or (content_type == "image/webp" and body[8:12] != b"WEBP")):
         raise AppError("invalid_poster", "poster content does not match its type", 415)
     request.app.state.settings.covers_root.mkdir(parents=True, exist_ok=True)
     relative = f"{uuid.uuid4().hex}{extension}"

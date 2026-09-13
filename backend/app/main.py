@@ -14,12 +14,11 @@ from .api.deps import get_db
 from .api.manage import router as manage_router
 from .api.public import router as public_router
 from .config import Settings
-from .db.migrations import migrate
 from .db.connection import connect
+from .db.migrations import migrate
 from .errors import AppError
 from .files import resolve_static
 from .repositories import content as repo
-from .services import content as service
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -71,7 +70,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         row = db.execute(f"SELECT n.* FROM notes n WHERE n.id=? AND {repo.PUBLIC_NOTE_SQL}", (note_id,)).fetchone()
         if row is None:
             # An authenticated administrator may read private static pages.
-            from .services.auth import current_user, COOKIE_NAME
+            from .services.auth import COOKIE_NAME, current_user
             if current_user(db, request.cookies.get(COOKIE_NAME)) is None:
                 raise AppError("not_found", "static page not found", 404)
             row = db.execute("SELECT * FROM notes WHERE id=?", (note_id,)).fetchone()

@@ -26,7 +26,7 @@ class Settings:
     max_cover_bytes: int = 5 * 1024 * 1024
 
     @classmethod
-    def from_env(cls) -> "Settings":
+    def from_env(cls) -> Settings:
         environment = os.getenv("ZIO_ENV", "development").lower()
         database_path = _path(os.getenv("ZIO_DATABASE_PATH", "./data/zio.sqlite3"))
         static_pages_root = _path(os.getenv("ZIO_STATIC_PAGES_ROOT", "./data/static-pages"))

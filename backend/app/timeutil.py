@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 
 def now_ms() -> int:
-    return int(datetime.now(timezone.utc).timestamp() * 1000)
+    return int(datetime.now(UTC).timestamp() * 1000)
 
 
 def parse_utc_ms(value: str | int | float) -> int:
@@ -17,19 +17,19 @@ def parse_utc_ms(value: str | int | float) -> int:
     parsed = datetime.fromisoformat(text)
     if parsed.tzinfo is None:
         raise ValueError("timestamp must include a timezone")
-    return int(parsed.astimezone(timezone.utc).timestamp() * 1000)
+    return int(parsed.astimezone(UTC).timestamp() * 1000)
 
 
 def iso_utc(value: int | None) -> str | None:
     if value is None:
         return None
-    return datetime.fromtimestamp(value / 1000, tz=timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    return datetime.fromtimestamp(value / 1000, tz=UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 def local_day_start_ms(value: int, timezone_name: str) -> int:
-    local = datetime.fromtimestamp(value / 1000, tz=timezone.utc).astimezone(ZoneInfo(timezone_name))
+    local = datetime.fromtimestamp(value / 1000, tz=UTC).astimezone(ZoneInfo(timezone_name))
     start = local.replace(hour=0, minute=0, second=0, microsecond=0)
-    return int(start.astimezone(timezone.utc).timestamp() * 1000)
+    return int(start.astimezone(UTC).timestamp() * 1000)
 
 
 def local_month_bounds(year: int, month: int, timezone_name: str) -> tuple[int, int]:
@@ -42,10 +42,10 @@ def local_month_bounds(year: int, month: int, timezone_name: str) -> tuple[int, 
     else:
         end = datetime(year, month + 1, 1, tzinfo=zone)
     return (
-        int(start.astimezone(timezone.utc).timestamp() * 1000),
-        int(end.astimezone(timezone.utc).timestamp() * 1000),
+        int(start.astimezone(UTC).timestamp() * 1000),
+        int(end.astimezone(UTC).timestamp() * 1000),
     )
 
 
 def local_date_key(value: int, timezone_name: str) -> str:
-    return datetime.fromtimestamp(value / 1000, tz=timezone.utc).astimezone(ZoneInfo(timezone_name)).date().isoformat()
+    return datetime.fromtimestamp(value / 1000, tz=UTC).astimezone(ZoneInfo(timezone_name)).date().isoformat()

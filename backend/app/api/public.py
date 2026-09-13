@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import FileResponse
 
 from ..errors import AppError
-from ..files import resolve_cover, resolve_static
+from ..files import resolve_cover
 from ..repositories import content as repo
 from ..security import make_cursor, read_cursor
 from ..services import content as service

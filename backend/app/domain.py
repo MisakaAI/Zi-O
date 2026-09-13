@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 import unicodedata
 from pathlib import PurePosixPath
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError

@@ -6,16 +6,16 @@ ZI/O is a single-user, self-hosted temporal archive. Notes are timestamped event
 
 ## Requirements
 
-Python 3.11+, Node.js 20+ (the repository is verified with Python 3.14 and Node 25), and SQLite 3.35+.
+[uv](https://docs.astral.sh/uv/), Python 3.11+, Node.js 20+ (the repository is verified with Python 3.14 and Node 25), and SQLite 3.35+.
 
 ## Local setup
 
 ```sh
-python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install -r backend/requirements.txt
+uv sync
 npm --prefix frontend install
 ```
+
+Python dependencies are declared in `pyproject.toml` and reproducibly locked in `uv.lock`. `uv sync` creates or updates the local `.venv` automatically.
 
 Set configuration in the shell (copy `backend/.env.example`, replace the secret, and export the values; the application intentionally does not load `.env` files implicitly):
 
@@ -25,22 +25,22 @@ export ZIO_STATIC_PAGES_ROOT="$PWD/data/static-pages"
 export ZIO_COVERS_ROOT="$PWD/data/covers"
 export ZIO_FRONTEND_DIST="$PWD/frontend/dist"
 export ZIO_PUBLIC_ORIGIN="http://127.0.0.1:8000"
-export ZIO_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+export ZIO_SECRET_KEY="$(uv run python -c 'import secrets; print(secrets.token_urlsafe(32))')"
 export ZIO_TIMEZONE="Asia/Shanghai"
 ```
 
 Initialize the database and the only administrator (`misaka`) once:
 
 ```sh
-PYTHONPATH=backend .venv/bin/python -m app.cli migrate
-PYTHONPATH=backend .venv/bin/python -m app.cli init-admin
+PYTHONPATH=backend uv run python -m app.cli migrate
+PYTHONPATH=backend uv run python -m app.cli init-admin
 ```
 
 Build and run:
 
 ```sh
 npm --prefix frontend run build
-PYTHONPATH=backend .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+PYTHONPATH=backend uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 Open `http://127.0.0.1:8000/now`.
@@ -53,7 +53,7 @@ Terminal 1 — start the API and allow requests from the Vite development server
 
 ```sh
 export ZIO_PUBLIC_ORIGIN="http://127.0.0.1:5173"
-PYTHONPATH=backend .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+PYTHONPATH=backend uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 Terminal 2 — start Vite:
@@ -77,7 +77,7 @@ Static pages are self-contained UTF-8 HTML files placed under `ZIO_STATIC_PAGES_
 Use SQLite's online backup API while the service is running:
 
 ```sh
-PYTHONPATH=backend .venv/bin/python -m app.cli backup /var/backups/zio-$(date +%Y%m%d-%H%M%S).sqlite3
+PYTHONPATH=backend uv run python -m app.cli backup /var/backups/zio-$(date +%Y%m%d-%H%M%S).sqlite3
 ```
 
 For a restore, stop the service, copy the verified backup to a new file, run `PRAGMA integrity_check` with SQLite, retain the old database as a dated rollback copy, then atomically replace `ZIO_DATABASE_PATH` and restart. Never copy a live database file with `cp` as a backup method.
@@ -87,6 +87,7 @@ The current system structure and ASCII request flows are documented in [`docs/AR
 ## Verification
 
 ```sh
-PYTHONPATH=backend .venv/bin/python -m unittest discover -s backend/tests -v
+uv run ruff check backend
+PYTHONPATH=backend uv run python -m unittest discover -s backend/tests -v
 npm --prefix frontend run build
 ```

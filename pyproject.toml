@@ -1,0 +1,34 @@
+[project]
+name = "zi-o"
+version = "0.1.0"
+description = "单用户、自托管的个人时间档案"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.141.1",
+    "markdown-it-py>=4.2.0",
+    "nh3>=0.3.7",
+    "uvicorn>=0.52.4",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+src = ["backend"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "UP", "B", "SIM", "RUF"]
+# FastAPI 使用依赖调用作为默认值；sqlite3.Row 的成员判断也不同于普通 dict。
+# 月份边界保留显式分支，避免条件表达式降低日期计算的可读性。
+ignore = ["B008", "SIM108", "SIM118"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.16.7",
+]

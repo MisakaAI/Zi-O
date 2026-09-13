@@ -23,7 +23,8 @@ class CoreTests(unittest.TestCase):
         migrate(self.root / "test.sqlite3", Path(__file__).parents[1] / "migrations")
 
     def tearDown(self):
-        self.db.close(); self.temp.cleanup()
+        self.db.close()
+        self.temp.cleanup()
 
     def note(self, **overrides):
         values = {"started_at": "2024-01-01T00:00:00Z", "visibility": "private", "title": "event"}
@@ -39,7 +40,8 @@ class CoreTests(unittest.TestCase):
             ItemWrite(category_id=project["id"], title="ZI/O", metadata_json={"repository_url": "https://example.com/zio"}),
         )
         self.assertEqual(item["category_code"], "PROJECT")
-        first = self.note(); second = self.note(started_at="2020-01-01T00:00:00Z")
+        first = self.note()
+        second = self.note(started_at="2020-01-01T00:00:00Z")
         self.assertEqual((first["archive_no"], second["archive_no"]), (1, 2))
         self.db.execute("DELETE FROM notes WHERE id=?", (first["id"],))
         third = self.note()
@@ -109,26 +111,33 @@ class CoreTests(unittest.TestCase):
 
     def test_rendering_removes_xss(self):
         html = render_content('<script>alert(1)</script><img src=x onerror=alert(1)><a href="javascript:bad()">x</a>', "html")
-        self.assertNotIn("script", html.lower()); self.assertNotIn("onerror", html.lower()); self.assertNotIn("javascript:", html.lower())
+        self.assertNotIn("script", html.lower())
+        self.assertNotIn("onerror", html.lower())
+        self.assertNotIn("javascript:", html.lower())
 
     def test_tag_slug_conflict(self):
-        first = content.create_tag(self.db, TagWrite(name="Read later")); second = content.create_tag(self.db, TagWrite(name="Read-later"))
-        self.assertEqual(first["slug"], "read-later"); self.assertEqual(second["slug"], "read-later-2")
+        first = content.create_tag(self.db, TagWrite(name="Read later"))
+        second = content.create_tag(self.db, TagWrite(name="Read-later"))
+        self.assertEqual(first["slug"], "read-later")
+        self.assertEqual(second["slug"], "read-later-2")
 
     def test_private_only_tag_is_not_in_public_index(self):
         tag = content.create_tag(self.db, TagWrite(name="Secret tag"))
-        note = self.note(tag_ids=[tag["id"]], visibility="private")
+        self.note(tag_ids=[tag["id"]], visibility="private")
         rows = __import__("app.repositories.content", fromlist=["public_tags"]).public_tags(self.db)
         self.assertEqual(rows, [])
 
     def test_password_and_session(self):
         create_admin(self.db, "misaka", "secret123")
         token, user = login(self.db, "misaka", "secret123", 100)
-        self.assertTrue(token); self.assertEqual(user["username"], "misaka")
-        with self.assertRaises(AppError): login(self.db, "misaka", "wrong", 100)
+        self.assertTrue(token)
+        self.assertEqual(user["username"], "misaka")
+        with self.assertRaises(AppError):
+            login(self.db, "misaka", "wrong", 100)
         expired, _ = login(self.db, "misaka", "secret123", -1)
         self.assertIsNone(current_user(self.db, expired))
-        with self.assertRaises(AppError): create_admin(self.db, "other", "密码密码12")
+        with self.assertRaises(AppError):
+            create_admin(self.db, "other", "密码密码12")
 
 
 if __name__ == "__main__":

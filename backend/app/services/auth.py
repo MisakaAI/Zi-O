@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import suppress
 
 from ..errors import AppError
 from ..repositories.content import purge_sessions, user_by_session, user_by_username
-from ..security import hash_password, new_session_token, token_hash, validate_password, verify_password, AuthUser
+from ..security import hash_password, new_session_token, token_hash, validate_password, verify_password
 from ..timeutil import now_ms
 
 COOKIE_NAME = "zio_session"
@@ -58,8 +59,5 @@ def current_user(db: sqlite3.Connection, token: str | None) -> sqlite3.Row | Non
 
 def logout(db: sqlite3.Connection, token: str | None) -> None:
     if token:
-        try:
+        with suppress(UnicodeEncodeError, ValueError):
             db.execute("DELETE FROM sessions WHERE token_hash=?", (token_hash(token),))
-        except (UnicodeEncodeError, ValueError):
-            pass
-
