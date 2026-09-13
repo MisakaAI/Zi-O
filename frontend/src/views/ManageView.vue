@@ -10,7 +10,7 @@ const notes = ref([]); const noteCursor = ref(null); const notesLoading = ref(fa
 const saving = ref(false); const noteEditor = ref(null)
 const loading = ref(true); const error = ref(null); const message = ref(null)
 const editingNoteId = ref(null); const editingItemId = ref(null); const posterFile = ref(null)
-const blankNote = () => ({ title: '', content_raw: '', started_at: localInput(new Date()), ended_at: '', visibility: 'private', static_path: '', category_id: '', secondary_categories: [], item_ids: [], item_links: {}, tag_ids: [] })
+const blankNote = () => ({ title: '', content_raw: '', started_at: localInput(new Date()), ended_at: '', visibility: 'private', static_path: '', category_id: '', secondary_categories: [], item_ids: [], item_links: {} })
 const noteForm = ref(blankNote())
 const blankItem = () => ({ category_id: '', title: '', subtitle: '', creator: '', visibility: 'private', metadata_json_text: '{}' })
 const itemForm = ref(blankItem())
@@ -51,7 +51,7 @@ async function load() {
 }
 function localInput(value) { if (!value) return ''; const date = new Date(value); const pad = n => String(n).padStart(2, '0'); return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}` }
 function resetNote() { editingNoteId.value = null; noteForm.value = blankNote(); if (roots.value.length) noteForm.value.category_id = roots.value.find(c => c.code === 'JOURNAL')?.id || roots.value[0].id }
-function editNote(note) { editingNoteId.value = note.id; noteForm.value = { ...blankNote(), title: note.title, content_raw: note.content_raw, started_at: localInput(note.started_at), ended_at: localInput(note.ended_at), visibility: note.visibility, static_path: note.static_path || '', category_id: note.categories.find(c => c.is_primary)?.id || roots.value[0]?.id, secondary_categories: note.categories.filter(c => !c.is_primary).map(c => c.id), item_ids: note.items.map(item => item.id), item_links: Object.fromEntries(note.items.map(item => [item.id, { context_label: item.context_label || '', progress_text: item.progress_text || '' }])), tag_ids: note.tags.map(tag => tag.id) }; nextTick(() => { noteEditor.value?.querySelector('h2')?.focus(); noteEditor.value?.scrollIntoView({ block: 'start' }) }) }
+function editNote(note) { editingNoteId.value = note.id; noteForm.value = { ...blankNote(), title: note.title, content_raw: note.content_raw, started_at: localInput(note.started_at), ended_at: localInput(note.ended_at), visibility: note.visibility, static_path: note.static_path || '', category_id: note.categories.find(c => c.is_primary)?.id || roots.value[0]?.id, secondary_categories: note.categories.filter(c => !c.is_primary).map(c => c.id), item_ids: note.items.map(item => item.id), item_links: Object.fromEntries(note.items.map(item => [item.id, { context_label: item.context_label || '', progress_text: item.progress_text || '' }])) }; nextTick(() => { noteEditor.value?.querySelector('h2')?.focus(); noteEditor.value?.scrollIntoView({ block: 'start' }) }) }
 async function loadOlderNotes() {
   if (!noteCursor.value || notesLoading.value) return
   notesLoading.value = true; error.value = null
@@ -65,7 +65,7 @@ async function saveNote() {
   saving.value = true; message.value = null; error.value = null
   try {
     const categoryIds = [Number(noteForm.value.category_id), ...noteForm.value.secondary_categories.map(Number)].filter(Boolean)
-    const payload = { title: noteForm.value.title, content_raw: noteForm.value.content_raw, started_at: new Date(noteForm.value.started_at).toISOString(), ended_at: noteForm.value.ended_at ? new Date(noteForm.value.ended_at).toISOString() : null, visibility: noteForm.value.visibility, static_path: noteForm.value.static_path || null, categories: categoryIds.map((id, index) => ({ category_id: id, is_primary: index === 0 })), items: noteForm.value.item_ids.map(id => ({ item_id: Number(id), context_label: noteForm.value.item_links[id]?.context_label || null, progress_text: noteForm.value.item_links[id]?.progress_text || null })), tag_ids: noteForm.value.tag_ids.map(Number) }
+    const payload = { title: noteForm.value.title, content_raw: noteForm.value.content_raw, started_at: new Date(noteForm.value.started_at).toISOString(), ended_at: noteForm.value.ended_at ? new Date(noteForm.value.ended_at).toISOString() : null, visibility: noteForm.value.visibility, static_path: noteForm.value.static_path || null, categories: categoryIds.map((id, index) => ({ category_id: id, is_primary: index === 0 })), items: noteForm.value.item_ids.map(id => ({ item_id: Number(id), context_label: noteForm.value.item_links[id]?.context_label || null, progress_text: noteForm.value.item_links[id]?.progress_text || null })) }
     if (editingNoteId.value) await patch(`/api/manage/notes/${editingNoteId.value}`, payload); else await post('/api/manage/notes', payload)
     setMessage(editingNoteId.value ? 'manage.messages.noteUpdated' : 'manage.messages.noteCreated'); resetNote(); await load()
   } catch (err) { error.value = err } finally { saving.value = false }
@@ -122,6 +122,7 @@ onMounted(load)
             <div class="editor-writing">
               <label>{{ t('manage.fields.title') }}<input v-model="noteForm.title" maxlength="200" :placeholder="t('manage.titlePlaceholder')"></label>
               <RichTextEditor v-model="noteForm.content_raw" :disabled="saving" />
+              <p class="field-help hashtag-hint">{{ t('manage.hashtagHint') }}</p>
             </div>
             <div class="editor-properties">
               <label>{{ t('manage.fields.startedAt') }}<input v-model="noteForm.started_at" type="datetime-local" required aria-describedby="note-time-help"></label>
@@ -141,7 +142,6 @@ onMounted(load)
                 <summary>{{ t('manage.links') }}</summary>
                 <fieldset><legend>{{ t('manage.fields.items') }}</legend><div v-if="items.length" class="choice-list"><label v-for="item in items" :key="item.id" class="choice"><input v-model="noteForm.item_ids" type="checkbox" :value="item.id">{{ item.title }}</label></div><p v-else class="field-help">{{ t('manage.emptyChoices') }}</p></fieldset>
                 <fieldset v-for="item in selectedItems" :key="item.id" class="item-link-fields"><legend>{{ item.title }}</legend><label>{{ t('manage.fields.itemContext') }}<input v-model="noteForm.item_links[item.id].context_label" maxlength="200"></label><label>{{ t('manage.fields.progress') }}<input v-model="noteForm.item_links[item.id].progress_text" maxlength="200"></label></fieldset>
-                <fieldset><legend>{{ t('manage.fields.tags') }}</legend><div v-if="tags.length" class="choice-list"><label v-for="tag in tags" :key="tag.id" class="choice"><input v-model="noteForm.tag_ids" type="checkbox" :value="tag.id">#{{ tag.name }}</label></div><p v-else class="field-help">{{ t('manage.emptyChoices') }}</p></fieldset>
               </details>
               <details class="editor-disclosure">
                 <summary>{{ t('manage.advanced') }}</summary>

@@ -16,6 +16,7 @@ class Settings:
     database_path: Path
     static_pages_root: Path
     covers_root: Path
+    uploads_root: Path
     frontend_dist: Path
     public_origin: str
     secret_key: bytes
@@ -24,6 +25,7 @@ class Settings:
     session_ttl_seconds: int = 7 * 24 * 60 * 60
     max_static_page_bytes: int = 5 * 1024 * 1024
     max_cover_bytes: int = 5 * 1024 * 1024
+    max_content_image_bytes: int = 5 * 1024 * 1024
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -31,6 +33,7 @@ class Settings:
         database_path = _path(os.getenv("ZIO_DATABASE_PATH", "./data/zio.sqlite3"))
         static_pages_root = _path(os.getenv("ZIO_STATIC_PAGES_ROOT", "./data/static-pages"))
         covers_root = _path(os.getenv("ZIO_COVERS_ROOT", "./data/covers"))
+        uploads_root = _path(os.getenv("ZIO_UPLOADS_ROOT", "./data/uploads"))
         frontend_dist = _path(os.getenv("ZIO_FRONTEND_DIST", "./frontend/dist"))
         origin = os.getenv("ZIO_PUBLIC_ORIGIN", "http://127.0.0.1:8000").rstrip("/")
         raw_secret = os.getenv("ZIO_SECRET_KEY", "dev-only-change-this-secret-key-please")
@@ -50,6 +53,7 @@ class Settings:
             database_path=database_path,
             static_pages_root=static_pages_root,
             covers_root=covers_root,
+            uploads_root=uploads_root,
             frontend_dist=frontend_dist,
             public_origin=origin,
             secret_key=secret,
@@ -61,4 +65,4 @@ class Settings:
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
         self.static_pages_root.mkdir(parents=True, exist_ok=True)
         self.covers_root.mkdir(parents=True, exist_ok=True)
-
+        self.uploads_root.mkdir(parents=True, exist_ok=True)

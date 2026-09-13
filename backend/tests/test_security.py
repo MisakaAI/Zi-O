@@ -6,7 +6,7 @@ from pathlib import Path
 
 from app.api.public import _cursor_scope
 from app.errors import AppError
-from app.files import resolve_static
+from app.files import resolve_static, resolve_upload
 from app.security import make_cursor, read_cursor
 
 
@@ -32,3 +32,17 @@ class SecurityTests(unittest.TestCase):
             for path in ("../outside.html", "foo/../ok.html", "foo/./ok.html", "/tmp/out.html", "link.html", "ok.txt", "missing.html"):
                 with self.assertRaises(AppError):
                     resolve_static(root, path, 1024)
+
+    def test_upload_path_rejects_traversal_and_symlink(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "uploads"
+            root.mkdir()
+            (root / "ok.png").write_bytes(b"png")
+            outside = Path(tmp) / "outside.png"
+            outside.write_bytes(b"secret")
+            (root / "link.png").symlink_to(outside)
+
+            self.assertEqual(resolve_upload(root, "ok.png").name, "ok.png")
+            for path in ("../outside.png", "/tmp/out.png", "link.png", "missing.png"):
+                with self.assertRaises(AppError):
+                    resolve_upload(root, path)

@@ -21,7 +21,7 @@ const excerpt = computed(() => {
       <p v-if="excerpt" class="note-excerpt">{{ excerpt }}</p>
       <div v-if="note.items?.length || note.tags?.length" class="chip-row">
         <RouterLink v-for="item in note.items" :key="`i${item.id}`" class="chip chip-item" :to="`/items/${item.id}`">{{ item.title }}</RouterLink>
-        <RouterLink v-for="tag in note.tags" :key="`t${tag.id}`" class="chip" :to="`/tag/${tag.slug}`">#{{ tag.name }}</RouterLink>
+        <RouterLink v-for="tag in note.tags" :key="`t${tag.id}`" class="chip chip-tag" :to="`/tag/${tag.slug}`">#{{ tag.name }}</RouterLink>
       </div>
       <RouterLink class="permalink" :to="`/n/${note.id}`">{{ t('common.openNote') }} <span aria-hidden="true">↗</span></RouterLink>
     </div>

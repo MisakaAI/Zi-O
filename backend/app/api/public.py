@@ -29,10 +29,29 @@ def _cursor_scope(cursor: str | None, scope: dict, secret: bytes) -> tuple[int, 
         raise AppError("cursor_invalid", "cursor is invalid", 400) from exc
 
 
-def _timeline_response(db, request: Request, *, category_code=None, tag_slug=None, item_id=None, cursor=None, limit=20):
-    scope = {"category": category_code, "tag": tag_slug, "item": item_id}
+def _unique_tag_slugs(values: list[str] | None) -> list[str]:
+    slugs: list[str] = []
+    for value in values or []:
+        if len(value) > 128:
+            raise AppError("invalid_input", "tag slug is too long", 422)
+        if value and value not in slugs:
+            slugs.append(value)
+    return slugs
+
+
+def _timeline_response(db, request: Request, *, category_code=None, tag_slugs=None, item_id=None, cursor=None, limit=20):
+    tag_slugs = _unique_tag_slugs(tag_slugs)
+    scope = {"category": category_code, "tags": tag_slugs, "item": item_id}
     position = _cursor_scope(cursor, scope, request.app.state.settings.secret_key)
-    rows = repo.timeline_rows(db, public=True, limit=limit + 1, cursor=position, category_code=category_code, tag_slug=tag_slug, item_id=item_id)
+    rows = repo.timeline_rows(
+        db,
+        public=True,
+        limit=limit + 1,
+        cursor=position,
+        category_code=category_code,
+        tag_slugs=tag_slugs,
+        item_id=item_id,
+    )
     has_more = len(rows) > limit
     rows = rows[:limit]
     next_cursor = None
@@ -57,7 +76,7 @@ def now(request: Request, db=Depends(get_db)):
         if candidate:
             signal = service.note_dict(db, candidate, include_raw=False)
     day_start = local_day_start_ms(stamp, settings["timezone"])
-    recent_rows = repo.timeline_rows(db, public=True, limit=6, category_code=None, tag_slug=None, item_id=None, before_ms=stamp)
+    recent_rows = repo.timeline_rows(db, public=True, limit=6, category_code=None, tag_slugs=None, item_id=None, before_ms=stamp)
     today = [row for row in recent_rows if row["started_at"] >= day_start and row["started_at"] <= stamp]
     chosen = today or [row for row in recent_rows if row["started_at"] <= stamp][:5]
     if signal:
@@ -85,11 +104,11 @@ def timeline(
     cursor: str | None = None,
     limit: int = Query(default=20, ge=1, le=50),
     category: str | None = Query(default=None, max_length=80),
-    tag: str | None = Query(default=None, max_length=128),
+    tag: list[str] | None = Query(default=None),
     item_id: int | None = Query(default=None, gt=0),
     db=Depends(get_db),
 ):
-    return _timeline_response(db, request, category_code=category, tag_slug=tag, item_id=item_id, cursor=cursor, limit=limit)
+    return _timeline_response(db, request, category_code=category, tag_slugs=tag, item_id=item_id, cursor=cursor, limit=limit)
 
 
 @router.get("/notes/{note_id}")
@@ -127,13 +146,24 @@ def item_poster(item_id: int, request: Request, db=Depends(get_db)):
 
 
 @router.get("/tags/{slug}")
-def tag(slug: str, request: Request, cursor: str | None = None, limit: int = Query(default=20, ge=1, le=50), db=Depends(get_db)):
-    tag_row = db.execute(f"""SELECT t.* FROM tags t JOIN note_tags nt ON nt.tag_id=t.id JOIN notes n ON n.id=nt.note_id
-      WHERE t.slug=? AND {repo.PUBLIC_NOTE_SQL} LIMIT 1""", (slug,)).fetchone()
-    if not tag_row:
+def tag(
+    slug: str,
+    request: Request,
+    tag: list[str] | None = Query(default=None),
+    cursor: str | None = None,
+    limit: int = Query(default=20, ge=1, le=50),
+    db=Depends(get_db),
+):
+    selected_slugs = _unique_tag_slugs([slug, *(tag or [])])
+    public_tags = {row["slug"]: row for row in repo.public_tags(db)}
+    if any(selected_slug not in public_tags for selected_slug in selected_slugs):
         raise AppError("not_found", "Tag not found", 404)
-    result = _timeline_response(db, request, tag_slug=slug, cursor=cursor, limit=limit)
-    result["tag"] = {"id": tag_row["id"], "name": tag_row["name"], "slug": tag_row["slug"]}
+    result = _timeline_response(db, request, tag_slugs=selected_slugs, cursor=cursor, limit=limit)
+    result["tags"] = [
+        {"id": public_tags[selected_slug]["id"], "name": public_tags[selected_slug]["name"], "slug": selected_slug}
+        for selected_slug in selected_slugs
+    ]
+    result["tag"] = result["tags"][0]
     return result
 
 

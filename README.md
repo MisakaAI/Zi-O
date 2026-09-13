@@ -23,6 +23,7 @@ Set configuration in the shell (copy `backend/.env.example`, replace the secret,
 export ZIO_DATABASE_PATH="$PWD/data/zio.sqlite3"
 export ZIO_STATIC_PAGES_ROOT="$PWD/data/static-pages"
 export ZIO_COVERS_ROOT="$PWD/data/covers"
+export ZIO_UPLOADS_ROOT="$PWD/data/uploads"
 export ZIO_FRONTEND_DIST="$PWD/frontend/dist"
 export ZIO_PUBLIC_ORIGIN="http://127.0.0.1:8000"
 export ZIO_SECRET_KEY="$(uv run python -c 'import secrets; print(secrets.token_urlsafe(32))')"
@@ -70,7 +71,7 @@ The frontend defaults to Simplified Chinese. Use the language button in the top 
 
 The service applies pending migrations at startup. Use `GET /api/health` for a health check. A systemd example is in `deploy/zio.service`; it runs one Uvicorn worker as a non-root user and expects TLS to be terminated by a reverse proxy. Keep `ZIO_SECRET_KEY` and the production origin in `/etc/zio/zio.env` with mode 600.
 
-Static pages are self-contained UTF-8 HTML files placed under `ZIO_STATIC_PAGES_ROOT`. A Note's `static_path` is a relative `.html` path; the `/page/{note_id}` endpoint performs the same public/private check as Note details and applies a restrictive CSP. Item posters are uploaded from the management UI as JPEG, PNG, or WebP (5 MiB maximum) and stored under `ZIO_COVERS_ROOT`.
+Static pages are self-contained UTF-8 HTML files placed under `ZIO_STATIC_PAGES_ROOT`. A Note's `static_path` is a relative `.html` path; the `/page/{note_id}` endpoint performs the same public/private check as Note details and applies a restrictive CSP. Item posters are stored under `ZIO_COVERS_ROOT`; Note images are stored under `ZIO_UPLOADS_ROOT`. Both accept JPEG, PNG, or WebP files up to 5 MiB. Note images are served only to the administrator or when referenced by an effectively public Note.
 
 ## Backup and restore
 

@@ -32,6 +32,19 @@ def get_tag(db: sqlite3.Connection, tag_id: int) -> sqlite3.Row | None:
     return db.execute("SELECT * FROM tags WHERE id = ?", (tag_id,)).fetchone()
 
 
+def get_content_image(db: sqlite3.Connection, image_id: str, *, public: bool) -> sqlite3.Row | None:
+    if not public:
+        return db.execute("SELECT * FROM content_images WHERE id=?", (image_id,)).fetchone()
+    return db.execute(
+        f"""SELECT ci.* FROM content_images ci
+            WHERE ci.id=? AND EXISTS (
+              SELECT 1 FROM note_images ni JOIN notes n ON n.id=ni.note_id
+              WHERE ni.image_id=ci.id AND {PUBLIC_NOTE_SQL}
+            )""",
+        (image_id,),
+    ).fetchone()
+
+
 def categories_for_note(db: sqlite3.Connection, note_id: int) -> list[sqlite3.Row]:
     return db.execute(
         """SELECT c.*, nc.is_primary FROM categories c
@@ -66,7 +79,7 @@ def timeline_rows(
     limit: int,
     cursor: tuple[int, int] | None = None,
     category_code: str | None = None,
-    tag_slug: str | None = None,
+    tag_slugs: list[str] | None = None,
     item_id: int | None = None,
     before_ms: int | None = None,
 ) -> list[sqlite3.Row]:
@@ -81,7 +94,7 @@ def timeline_rows(
     if category_code:
         where.append("EXISTS (SELECT 1 FROM note_categories qnc JOIN categories qc ON qc.id=qnc.category_id WHERE qnc.note_id=n.id AND qc.code=?)")
         params.append(category_code)
-    if tag_slug:
+    for tag_slug in tag_slugs or []:
         where.append("EXISTS (SELECT 1 FROM note_tags qnt JOIN tags qt ON qt.id=qnt.tag_id WHERE qnt.note_id=n.id AND qt.slug=?)")
         params.append(tag_slug)
     if item_id:

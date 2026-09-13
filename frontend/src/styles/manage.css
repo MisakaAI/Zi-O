@@ -43,10 +43,12 @@
 .rich-text-toolbar button.active { border-color: #80516a; background: #291d25; color: var(--text); }
 .toolbar-spacer { flex: 1; min-width: .5rem; }
 .rich-text-editor { min-height: 430px; border: 1px solid var(--line); border-radius: 0 0 5px 5px; background: var(--bg); }
-.rich-text-editor:focus-within { border-color: var(--signal); box-shadow: 0 0 0 1px var(--signal); }
+.rich-text-editor:focus-within { border-color: #50545f; }
 .rich-text-surface { min-height: 428px; padding: 1rem; outline: none; }
 .rich-text-surface p { margin: 0 0 1rem; }
 .rich-text-surface > :last-child { margin-bottom: 0; }
+.rich-text-source { width: 100%; min-height: 430px; padding: 1rem; border-radius: 0 0 5px 5px; color: var(--text); font: .78rem/1.75 var(--mono); resize: vertical; outline-color: #6d727e; }
+.rich-text-error { margin-top: .7rem; }
 .field-pair { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
 .segmented-field { display: grid; gap: .45rem; min-width: 0; }
 .segmented-control { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; max-width: 240px; padding: .2rem; border: 1px solid var(--line); border-radius: 5px; background: var(--bg); }

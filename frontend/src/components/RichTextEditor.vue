@@ -1,7 +1,9 @@
 <script setup>
-import { onBeforeUnmount, useId, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, useId, watch } from 'vue'
+import Image from '@tiptap/extension-image'
 import { EditorContent, useEditor } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
+import { api } from '../api/client'
 import { useI18n } from '../i18n'
 
 const props = defineProps({
@@ -9,13 +11,21 @@ const props = defineProps({
   disabled: { type: Boolean, default: false },
 })
 const emit = defineEmits(['update:modelValue'])
-const { t } = useI18n()
+const { t, errorKey } = useI18n()
 const labelId = `rich-text-${useId()}`
+const imageInput = ref(null)
+const sourceMode = ref(false)
+const uploading = ref(false)
+const uploadError = ref(null)
+const localizedUploadError = computed(() => uploadError.value ? t(errorKey(uploadError.value)) : '')
 
 const editor = useEditor({
   content: props.modelValue,
   editable: !props.disabled,
-  extensions: [StarterKit.configure({ heading: { levels: [2, 3] } })],
+  extensions: [
+    StarterKit.configure({ heading: { levels: [2, 3] } }),
+    Image.configure({ allowBase64: false }),
+  ],
   editorProps: {
     attributes: {
       class: 'sanitized-content rich-text-surface',
@@ -46,27 +56,100 @@ const controls = [
   { key: 'codeBlock', text: '{ }', command: () => editor.value.chain().focus().toggleCodeBlock().run(), active: () => editor.value.isActive('codeBlock') },
   { key: 'horizontalRule', text: '—', command: () => editor.value.chain().focus().setHorizontalRule().run(), active: () => false },
 ]
+
+function toggleSourceMode() {
+  if (sourceMode.value && editor.value) editor.value.commands.setContent(props.modelValue || '', { emitUpdate: false })
+  sourceMode.value = !sourceMode.value
+}
+
+function escapeAttribute(value) {
+  return value.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+}
+
+async function uploadImage(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+  uploading.value = true
+  uploadError.value = null
+  try {
+    const result = await api('/api/manage/content-images', {
+      method: 'POST',
+      headers: { 'Content-Type': file.type },
+      body: file,
+    })
+    const alt = file.name.slice(0, 200)
+    if (sourceMode.value) {
+      emit('update:modelValue', `${props.modelValue}<img src="${result.url}" alt="${escapeAttribute(alt)}">`)
+    } else {
+      editor.value.chain().focus().setImage({ src: result.url, alt }).run()
+    }
+  } catch (err) {
+    uploadError.value = err
+  } finally {
+    uploading.value = false
+  }
+}
 </script>
 
 <template>
   <div class="rich-text-field">
     <span :id="labelId" class="field-label">{{ t('manage.fields.content') }}</span>
     <div v-if="editor" class="rich-text-toolbar" role="toolbar" :aria-label="t('manage.toolbar.label')">
+      <template v-if="!sourceMode">
+        <button
+          v-for="control in controls"
+          :key="control.key"
+          type="button"
+          :class="{ active: control.active() }"
+          :aria-label="t(`manage.toolbar.${control.key}`)"
+          :title="t(`manage.toolbar.${control.key}`)"
+          :aria-pressed="control.active()"
+          :disabled="disabled"
+          @click="control.command"
+        >{{ control.text }}</button>
+      </template>
       <button
-        v-for="control in controls"
-        :key="control.key"
         type="button"
-        :class="{ active: control.active() }"
-        :aria-label="t(`manage.toolbar.${control.key}`)"
-        :title="t(`manage.toolbar.${control.key}`)"
-        :aria-pressed="control.active()"
+        :aria-label="t('manage.toolbar.image')"
+        :title="t('manage.toolbar.image')"
+        :disabled="disabled || uploading"
+        @click="imageInput?.click()"
+      >{{ uploading ? '…' : 'IMG' }}</button>
+      <input
+        ref="imageInput"
+        class="sr-only"
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        aria-hidden="true"
+        tabindex="-1"
+        @change="uploadImage"
+      >
+      <button
+        type="button"
+        :class="{ active: sourceMode }"
+        :aria-label="t('manage.toolbar.source')"
+        :title="t('manage.toolbar.source')"
+        :aria-pressed="sourceMode"
         :disabled="disabled"
-        @click="control.command"
-      >{{ control.text }}</button>
+        @click="toggleSourceMode"
+      >&lt;/&gt;</button>
       <span class="toolbar-spacer" aria-hidden="true"></span>
-      <button type="button" :aria-label="t('manage.toolbar.undo')" :title="t('manage.toolbar.undo')" :disabled="disabled || !editor.can().chain().focus().undo().run()" @click="editor.chain().focus().undo().run()">↶</button>
-      <button type="button" :aria-label="t('manage.toolbar.redo')" :title="t('manage.toolbar.redo')" :disabled="disabled || !editor.can().chain().focus().redo().run()" @click="editor.chain().focus().redo().run()">↷</button>
+      <template v-if="!sourceMode">
+        <button type="button" :aria-label="t('manage.toolbar.undo')" :title="t('manage.toolbar.undo')" :disabled="disabled || !editor.can().chain().focus().undo().run()" @click="editor.chain().focus().undo().run()">↶</button>
+        <button type="button" :aria-label="t('manage.toolbar.redo')" :title="t('manage.toolbar.redo')" :disabled="disabled || !editor.can().chain().focus().redo().run()" @click="editor.chain().focus().redo().run()">↷</button>
+      </template>
     </div>
-    <EditorContent :editor="editor" class="rich-text-editor" />
+    <textarea
+      v-if="sourceMode"
+      class="rich-text-editor rich-text-source"
+      :value="modelValue"
+      :disabled="disabled"
+      spellcheck="false"
+      :aria-labelledby="labelId"
+      @input="emit('update:modelValue', $event.target.value)"
+    ></textarea>
+    <EditorContent v-else :editor="editor" class="rich-text-editor" />
+    <p v-if="uploadError" class="inline-error rich-text-error" role="alert">{{ localizedUploadError }}</p>
   </div>
 </template>

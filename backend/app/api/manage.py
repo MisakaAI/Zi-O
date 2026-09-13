@@ -29,6 +29,29 @@ from .deps import get_db, require_user, require_write_origin
 router = APIRouter(prefix="/api/manage", tags=["manage"], dependencies=[Depends(require_user)])
 
 _NOTES_CURSOR_SCOPE = {"resource": "manage_notes"}
+_ACCEPTED_IMAGES = {
+    "image/png": (b"\x89PNG\r\n\x1a\n", ".png"),
+    "image/jpeg": (b"\xff\xd8\xff", ".jpg"),
+    "image/webp": (b"RIFF", ".webp"),
+}
+
+
+async def _read_image(request: Request, *, max_bytes: int, invalid_code: str, too_large_code: str) -> tuple[bytes, str, str]:
+    content_type = request.headers.get("content-type", "").split(";", 1)[0].lower()
+    if content_type not in _ACCEPTED_IMAGES:
+        raise AppError(invalid_code, "image must be PNG, JPEG, or WebP", 415)
+    total = 0
+    chunks: list[bytes] = []
+    async for chunk in request.stream():
+        total += len(chunk)
+        if total > max_bytes:
+            raise AppError(too_large_code, "image exceeds 5 MiB", 413)
+        chunks.append(chunk)
+    body = b"".join(chunks)
+    signature, extension = _ACCEPTED_IMAGES[content_type]
+    if not body.startswith(signature) or (content_type == "image/webp" and (len(body) < 12 or body[8:12] != b"WEBP")):
+        raise AppError(invalid_code, "image content does not match its type", 415)
+    return body, content_type, extension
 
 
 def _notes_cursor_position(cursor: str | None, secret: bytes) -> tuple[int, int] | None:
@@ -156,22 +179,12 @@ async def upload_poster(item_id: int, request: Request, db=Depends(get_db)):
     row = repo.get_item(db, item_id)
     if row is None:
         raise AppError("item_not_found", "item not found", 404)
-    content_type = request.headers.get("content-type", "").split(";", 1)[0].lower()
-    accepted = {"image/png": (b"\x89PNG\r\n\x1a\n", ".png"), "image/jpeg": (b"\xff\xd8\xff", ".jpg"), "image/webp": (b"RIFF", ".webp")}
-    if content_type not in accepted:
-        raise AppError("invalid_poster", "poster must be PNG, JPEG, or WebP", 415)
-    max_bytes = request.app.state.settings.max_cover_bytes
-    total = 0
-    chunks: list[bytes] = []
-    async for chunk in request.stream():
-        total += len(chunk)
-        if total > max_bytes:
-            raise AppError("poster_too_large", "poster exceeds 5 MiB", 413)
-        chunks.append(chunk)
-    body = b"".join(chunks)
-    signature, extension = accepted[content_type]
-    if not body.startswith(signature) or ((content_type == "image/webp" and len(body) < 12) or (content_type == "image/webp" and body[8:12] != b"WEBP")):
-        raise AppError("invalid_poster", "poster content does not match its type", 415)
+    body, _, extension = await _read_image(
+        request,
+        max_bytes=request.app.state.settings.max_cover_bytes,
+        invalid_code="invalid_poster",
+        too_large_code="poster_too_large",
+    )
     request.app.state.settings.covers_root.mkdir(parents=True, exist_ok=True)
     relative = f"{uuid.uuid4().hex}{extension}"
     destination = request.app.state.settings.covers_root / relative
@@ -185,6 +198,30 @@ async def upload_poster(item_id: int, request: Request, db=Depends(get_db)):
     safe_remove(request.app.state.settings.covers_root, old_path)
     row = db.execute("""SELECT i.*,c.code AS category_code,c.name AS category_name FROM items i JOIN categories c ON c.id=i.category_id WHERE i.id=?""", (item_id,)).fetchone()
     return service.item_dict(db, row, public=False)
+
+
+@router.post("/content-images", dependencies=[Depends(require_write_origin)], status_code=201)
+async def upload_content_image(request: Request, db=Depends(get_db)):
+    body, media_type, extension = await _read_image(
+        request,
+        max_bytes=request.app.state.settings.max_content_image_bytes,
+        invalid_code="invalid_image",
+        too_large_code="image_too_large",
+    )
+    image_id = uuid.uuid4().hex
+    relative = f"{image_id}{extension}"
+    destination = request.app.state.settings.uploads_root / relative
+    request.app.state.settings.uploads_root.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(body)
+    try:
+        db.execute(
+            "INSERT INTO content_images(id,storage_path,media_type,created_at) VALUES(?,?,?,?)",
+            (image_id, relative, media_type, now_ms()),
+        )
+    except Exception:
+        destination.unlink(missing_ok=True)
+        raise
+    return {"id": image_id, "url": f"/api/content-images/{image_id}", "media_type": media_type}
 
 
 @router.delete("/items/{item_id}/poster", dependencies=[Depends(require_write_origin)])

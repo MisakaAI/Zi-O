@@ -134,7 +134,9 @@ export const messages = {
       "staticPage": "阅读独立页面"
     },
     "tag": {
-      "eyebrow": "TAG / {slug}"
+      "eyebrow": "TAG / {slug}",
+      "filterLabel": "按标签筛选记录",
+      "filterHint": "可选择任意数量的标签；选择多个时，仅显示同时包含全部标签的记录。"
     },
     "login": {
       "eyebrow": "WORKSPACE / 管理员入口",
@@ -210,6 +212,8 @@ export const messages = {
         "quote": "引用",
         "codeBlock": "代码块",
         "horizontalRule": "分隔线",
+        "image": "插入图片",
+        "source": "编辑 HTML 源代码",
         "undo": "撤销",
         "redo": "重做"
       },
@@ -246,12 +250,14 @@ export const messages = {
       },
       "errors": {
         "metadataInvalid": "元数据必须是有效的 JSON。",
-        "posterUploadFailed": "海报上传失败。"
+        "posterUploadFailed": "海报上传失败。",
+        "imageUploadFailed": "正文图片上传失败。"
       },
       "titlePlaceholder": "为这段经历起个名字",
       "properties": "记录属性",
-      "links": "关联档案与标签",
+      "links": "关联档案",
       "advanced": "更多选项",
+      "hashtagHint": "在正文中输入 #标签，保存后会自动归入标签。",
       "privateHint": "私密记录仅你可见。",
       "publicHint": "公开记录对所有访客可见。",
       "localTimeHint": "按当前设备的本地时间填写。",
@@ -300,6 +306,9 @@ export const messages = {
       "invalidTimezone": "时区无法识别。",
       "invalidPoster": "海报格式无效。",
       "posterTooLarge": "海报超过 5 MiB。",
+      "imageNotFound": "正文图片不存在或不可访问。",
+      "invalidImage": "正文图片仅支持 JPEG、PNG 或 WebP。",
+      "imageTooLarge": "正文图片超过 5 MiB。",
       "frontendNotBuilt": "前端尚未构建。"
     }
   },
@@ -438,7 +447,9 @@ export const messages = {
       "staticPage": "Read standalone page"
     },
     "tag": {
-      "eyebrow": "TAG / {slug}"
+      "eyebrow": "TAG / {slug}",
+      "filterLabel": "Filter notes by tag",
+      "filterHint": "Select any number of tags. With multiple tags selected, only notes containing all of them are shown."
     },
     "login": {
       "eyebrow": "WORKSPACE / ADMIN ACCESS",
@@ -514,6 +525,8 @@ export const messages = {
         "quote": "Block quote",
         "codeBlock": "Code block",
         "horizontalRule": "Horizontal rule",
+        "image": "Insert image",
+        "source": "Edit HTML source",
         "undo": "Undo",
         "redo": "Redo"
       },
@@ -550,12 +563,14 @@ export const messages = {
       },
       "errors": {
         "metadataInvalid": "Metadata must be valid JSON.",
-        "posterUploadFailed": "Poster upload failed."
+        "posterUploadFailed": "Poster upload failed.",
+        "imageUploadFailed": "The content image could not be uploaded."
       },
       "titlePlaceholder": "Give this moment a title",
       "properties": "Note details",
-      "links": "Items & tags",
+      "links": "Linked items",
       "advanced": "More options",
+      "hashtagHint": "Type #tag in the body; it will be added to the note’s tags when saved.",
       "privateHint": "Private notes are only visible to you.",
       "publicHint": "Public notes are visible to all visitors.",
       "localTimeHint": "Enter times in your device’s local timezone.",
@@ -604,6 +619,9 @@ export const messages = {
       "invalidTimezone": "The timezone is not recognized.",
       "invalidPoster": "The poster format is invalid.",
       "posterTooLarge": "The poster exceeds 5 MiB.",
+      "imageNotFound": "The content image does not exist or is unavailable.",
+      "invalidImage": "Content images must be JPEG, PNG, or WebP.",
+      "imageTooLarge": "The content image exceeds 5 MiB.",
       "frontendNotBuilt": "The frontend build is not available."
     }
   }

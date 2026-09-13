@@ -23,6 +23,7 @@ Python 依赖统一声明在 `pyproject.toml` 中，并由 `uv.lock` 锁定以�
 export ZIO_DATABASE_PATH="$PWD/data/zio.sqlite3"
 export ZIO_STATIC_PAGES_ROOT="$PWD/data/static-pages"
 export ZIO_COVERS_ROOT="$PWD/data/covers"
+export ZIO_UPLOADS_ROOT="$PWD/data/uploads"
 export ZIO_FRONTEND_DIST="$PWD/frontend/dist"
 export ZIO_PUBLIC_ORIGIN="http://127.0.0.1:8000"
 export ZIO_SECRET_KEY="$(uv run python -c 'import secrets; print(secrets.token_urlsafe(32))')"
@@ -70,7 +71,7 @@ npm --prefix frontend run dev
 
 服务启动时会自动应用待执行的迁移。使用 `GET /api/health` 进行健康检查。`deploy/zio.service` 提供了 systemd 示例：它以非 root 用户运行单个 Uvicorn worker，并假设由反向代理负责 TLS。将 `ZIO_SECRET_KEY` 和生产环境 Origin 保存在权限为 600 的 `/etc/zio/zio.env` 中。
 
-静态页面必须是放在 `ZIO_STATIC_PAGES_ROOT` 下的自包含 UTF-8 HTML 文件。Note 的 `static_path` 必须是相对 `.html` 路径；`/page/{note_id}` 会执行与 Note 详情相同的公开/私密权限检查，并应用严格 CSP。管理端支持上传 JPEG、PNG 或 WebP 海报（最大 5 MiB），文件存放在 `ZIO_COVERS_ROOT` 下。
+静态页面必须是放在 `ZIO_STATIC_PAGES_ROOT` 下的自包含 UTF-8 HTML 文件。Note 的 `static_path` 必须是相对 `.html` 路径；`/page/{note_id}` 会执行与 Note 详情相同的公开/私密权限检查，并应用严格 CSP。Item 海报存放在 `ZIO_COVERS_ROOT`，Note 正文图片存放在 `ZIO_UPLOADS_ROOT`；二者均支持最大 5 MiB 的 JPEG、PNG 或 WebP。正文图片仅对管理员或引用它的有效公开 Note 开放。
 
 ## 备份与恢复
 

@@ -80,6 +80,7 @@ const API_ERROR_KEYS = {
   not_found: 'errors.notFound',
   static_page_not_found: 'errors.staticPageNotFound',
   poster_not_found: 'errors.posterNotFound',
+  image_not_found: 'errors.imageNotFound',
   cursor_invalid: 'errors.cursorInvalid',
   cursor_scope_mismatch: 'errors.cursorScopeMismatch',
   validation_error: 'errors.validation',
@@ -106,7 +107,10 @@ const API_ERROR_KEYS = {
   invalid_timezone: 'errors.invalidTimezone',
   invalid_poster: 'errors.invalidPoster',
   poster_too_large: 'errors.posterTooLarge',
+  invalid_image: 'errors.invalidImage',
+  image_too_large: 'errors.imageTooLarge',
   poster_upload_failed: 'manage.errors.posterUploadFailed',
+  image_upload_failed: 'manage.errors.imageUploadFailed',
   frontend_not_built: 'errors.frontendNotBuilt',
 }
 

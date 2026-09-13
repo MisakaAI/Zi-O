@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
+from html.parser import HTMLParser
+from typing import ClassVar
 
 from ..domain import name_key, normalize_text, slugify, validate_metadata, validate_static_path, validate_timezone
 from ..errors import AppError
-from ..rendering import render_content
+from ..rendering import linkify_hashtags, render_content
 from ..repositories import content as repo
 from ..schemas import (
     CategoryLink,
@@ -19,6 +22,91 @@ from ..schemas import (
     TagWrite,
 )
 from ..timeutil import iso_utc, local_date_key, local_month_bounds, now_ms, parse_utc_ms
+
+_HASHTAG_PATTERN = re.compile(r"(?<![\w#])#([\w]{1,64})(?!\w)", re.UNICODE)
+_CONTENT_IMAGE_PATH = re.compile(r"/api/content-images/([0-9a-f]{32})")
+
+
+class _HashtagTextParser(HTMLParser):
+    _IGNORED_TAGS: ClassVar[frozenset[str]] = frozenset({"code", "pre", "script", "style"})
+    _BLOCK_TAGS: ClassVar[frozenset[str]] = frozenset({"address", "blockquote", "br", "div", "h1", "h2", "h3", "h4", "h5", "h6", "li", "p"})
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self._ignored_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        del attrs
+        tag = tag.lower()
+        if tag in self._IGNORED_TAGS:
+            self._ignored_depth += 1
+        elif self._ignored_depth == 0 and tag in self._BLOCK_TAGS:
+            self.parts.append("\n")
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        del attrs
+        if self._ignored_depth == 0 and tag.lower() in self._BLOCK_TAGS:
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        tag = tag.lower()
+        if tag in self._IGNORED_TAGS:
+            self._ignored_depth = max(0, self._ignored_depth - 1)
+        elif self._ignored_depth == 0 and tag in self._BLOCK_TAGS:
+            self.parts.append("\n")
+
+    def handle_data(self, data: str) -> None:
+        if self._ignored_depth == 0:
+            self.parts.append(data)
+
+
+def _hashtag_names(content_raw: str) -> list[str]:
+    parser = _HashtagTextParser()
+    parser.feed(content_raw)
+    parser.close()
+    text = "".join(parser.parts)
+    names: list[str] = []
+    seen: set[str] = set()
+    for match in _HASHTAG_PATTERN.finditer(text):
+        name = match.group(1)
+        key = name_key(name)
+        if key not in seen:
+            names.append(name)
+            seen.add(key)
+    return names
+
+
+class _ContentImageParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.ids: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.lower() != "img":
+            return
+        source = next((value for name, value in attrs if name.lower() == "src"), None)
+        if source:
+            match = _CONTENT_IMAGE_PATH.fullmatch(source)
+            if match and match.group(1) not in self.ids:
+                self.ids.append(match.group(1))
+
+    handle_startendtag = handle_starttag
+
+
+def _content_image_ids(db: sqlite3.Connection, content_raw: str) -> list[str]:
+    parser = _ContentImageParser()
+    parser.feed(content_raw)
+    parser.close()
+    if parser.ids:
+        placeholders = ",".join("?" for _ in parser.ids)
+        found = {
+            row["id"]
+            for row in db.execute(f"SELECT id FROM content_images WHERE id IN ({placeholders})", parser.ids).fetchall()
+        }
+        if found != set(parser.ids):
+            raise AppError("image_not_found", "one or more content images do not exist", 422)
+    return parser.ids
 
 
 def _required_row(row: sqlite3.Row | None, code: str, message: str) -> sqlite3.Row:
@@ -76,6 +164,39 @@ def _tag_ids(db: sqlite3.Connection, tag_ids: list[int] | None) -> list[int]:
     return ids
 
 
+def _merge_tag_ids(*groups: list[int]) -> list[int]:
+    ids: list[int] = []
+    seen: set[int] = set()
+    for group in groups:
+        for tag_id in group:
+            if tag_id not in seen:
+                ids.append(tag_id)
+                seen.add(tag_id)
+    return ids
+
+
+def _insert_tag(db: sqlite3.Connection, display: str, *, reject_duplicate: bool) -> int:
+    key = name_key(display)
+    existing = db.execute("SELECT id FROM tags WHERE name_key=?", (key,)).fetchone()
+    if existing:
+        if reject_duplicate:
+            raise AppError("duplicate_tag", "tag name already exists", 409)
+        return existing["id"]
+    base = slugify(display)
+    slug = base
+    suffix = 2
+    while db.execute("SELECT 1 FROM tags WHERE slug=?", (slug,)).fetchone():
+        slug = f"{base}-{suffix}"
+        suffix += 1
+    stamp = now_ms()
+    cursor = db.execute("INSERT INTO tags(name,name_key,slug,created_at,updated_at) VALUES(?,?,?,?,?)", (display, key, slug, stamp, stamp))
+    return cursor.lastrowid
+
+
+def _content_tag_ids(db: sqlite3.Connection, content_raw: str) -> list[int]:
+    return [_insert_tag(db, name, reject_duplicate=False) for name in _hashtag_names(content_raw)]
+
+
 def _ensure_public_links(db: sqlite3.Connection, note_id: int, visibility: str, links: list[ItemLink]) -> None:
     if visibility != "public" or not links:
         return
@@ -98,13 +219,19 @@ def _replace_note_links(db: sqlite3.Connection, note_id: int, categories: list[t
     db.executemany("INSERT INTO note_tags(note_id, tag_id) VALUES (?, ?)", [(note_id, tag_id) for tag_id in tags])
 
 
+def _replace_note_images(db: sqlite3.Connection, note_id: int, image_ids: list[str]) -> None:
+    db.execute("DELETE FROM note_images WHERE note_id=?", (note_id,))
+    db.executemany("INSERT INTO note_images(note_id, image_id) VALUES (?, ?)", [(note_id, image_id) for image_id in image_ids])
+
+
 def note_dict(db: sqlite3.Connection, row: sqlite3.Row, *, include_raw: bool) -> dict:
+    tags = [{"id": tag["id"], "name": tag["name"], "slug": tag["slug"]} for tag in repo.tags_for_note(db, row["id"])]
     result = {
         "id": row["id"],
         "archive_no": row["archive_no"],
         "archive_label": f"LOG/{row['archive_no']:06d}",
         "title": row["title"],
-        "content_html_sanitized": render_content(row["content_raw"]),
+        "content_html_sanitized": linkify_hashtags(render_content(row["content_raw"]), tags),
         "started_at": iso_utc(row["started_at"]),
         "ended_at": iso_utc(row["ended_at"]),
         "visibility": row["visibility"],
@@ -123,7 +250,7 @@ def note_dict(db: sqlite3.Connection, row: sqlite3.Row, *, include_raw: bool) ->
             }
             for item in repo.items_for_note(db, row["id"])
         ],
-        "tags": [{"id": tag["id"], "name": tag["name"], "slug": tag["slug"]} for tag in repo.tags_for_note(db, row["id"])],
+        "tags": tags,
     }
     if include_raw:
         result["content_raw"] = row["content_raw"]
@@ -167,13 +294,15 @@ def create_note(db: sqlite3.Connection, payload: NoteWrite) -> dict:
     static_path = validate_static_path(payload.static_path)
     categories = _category_links(db, payload.categories)
     items = _item_links(db, payload.items)
-    tags = _tag_ids(db, payload.tag_ids)
+    explicit_tags = _tag_ids(db, payload.tag_ids)
     _ensure_public_links(db, 0, payload.visibility, items)
     title = normalize_text(payload.title, 200, "title")
     content = normalize_text(payload.content_raw, 1_048_576, "content_raw")
     timestamp = now_ms()
     db.execute("BEGIN IMMEDIATE")
     try:
+        tags = _merge_tag_ids(explicit_tags, _content_tag_ids(db, content))
+        image_ids = _content_image_ids(db, content)
         db.execute("UPDATE counters SET value=value+1 WHERE name='archive_no'")
         archive_no = db.execute("SELECT value FROM counters WHERE name='archive_no'").fetchone()["value"]
         cursor = db.execute(
@@ -183,6 +312,7 @@ def create_note(db: sqlite3.Connection, payload: NoteWrite) -> dict:
         )
         note_id = cursor.lastrowid
         _replace_note_links(db, note_id, categories, items, tags)
+        _replace_note_images(db, note_id, image_ids)
         db.execute("COMMIT")
     except Exception:
         db.execute("ROLLBACK")
@@ -200,7 +330,7 @@ def update_note(db: sqlite3.Connection, note_id: int, payload: NotePatch) -> dic
     visibility = data.get("visibility", current["visibility"])
     categories = _category_links(db, payload.categories) if "categories" in data else None
     items = _item_links(db, payload.items) if "items" in data else None
-    tags = _tag_ids(db, payload.tag_ids) if "tag_ids" in data else None
+    explicit_tags = _tag_ids(db, payload.tag_ids) if "tag_ids" in data else None
     if items is not None:
         _ensure_public_links(db, note_id, visibility, items)
     elif visibility == "public":
@@ -208,17 +338,25 @@ def update_note(db: sqlite3.Connection, note_id: int, payload: NotePatch) -> dic
         if private:
             raise AppError("private_item_link", "a public note cannot be linked to a private item", 409)
     static_path = validate_static_path(data["static_path"]) if "static_path" in data else current["static_path"]
+    content = normalize_text(data["content_raw"], 1_048_576, "content_raw") if "content_raw" in data else current["content_raw"]
+    tags = None
     values = {
         "title": normalize_text(data["title"], 200, "title") if "title" in data else current["title"],
-        "content_raw": normalize_text(data["content_raw"], 1_048_576, "content_raw") if "content_raw" in data else current["content_raw"],
+        "content_raw": content,
         "started_at": started, "ended_at": ended, "visibility": visibility, "static_path": static_path, "updated_at": now_ms(),
     }
     db.execute("BEGIN IMMEDIATE")
     try:
+        if "content_raw" in data:
+            tags = _merge_tag_ids(explicit_tags or [], _content_tag_ids(db, content))
+        elif explicit_tags is not None:
+            tags = explicit_tags
         db.execute(
             """UPDATE notes SET title=?,content_raw=?,started_at=?,ended_at=?,visibility=?,static_path=?,updated_at=? WHERE id=?""",
             (*values.values(), note_id),
         )
+        if "content_raw" in data:
+            _replace_note_images(db, note_id, _content_image_ids(db, content))
         if categories is not None or items is not None or tags is not None:
             old_categories = [(row["id"], int(row["is_primary"])) for row in repo.categories_for_note(db, note_id)]
             old_items = [ItemLink(item_id=row["id"], context_label=row["context_label"], progress_text=row["progress_text"]) for row in repo.items_for_note(db, note_id)]
@@ -349,18 +487,8 @@ def delete_category(db: sqlite3.Connection, category_id: int) -> None:
 
 def create_tag(db: sqlite3.Connection, payload: TagWrite) -> dict:
     display = normalize_text(payload.name, 64, "name", allow_empty=False)
-    key = name_key(display)
-    if db.execute("SELECT 1 FROM tags WHERE name_key=?", (key,)).fetchone():
-        raise AppError("duplicate_tag", "tag name already exists", 409)
-    base = slugify(display)
-    slug = base
-    suffix = 2
-    while db.execute("SELECT 1 FROM tags WHERE slug=?", (slug,)).fetchone():
-        slug = f"{base}-{suffix}"
-        suffix += 1
-    stamp = now_ms()
-    cur = db.execute("INSERT INTO tags(name,name_key,slug,created_at,updated_at) VALUES(?,?,?,?,?)", (display, key, slug, stamp, stamp))
-    return dict(_required_row(repo.get_tag(db, cur.lastrowid), "tag_not_found", "tag not found"))
+    tag_id = _insert_tag(db, display, reject_duplicate=True)
+    return dict(_required_row(repo.get_tag(db, tag_id), "tag_not_found", "tag not found"))
 
 
 def update_tag(db: sqlite3.Connection, tag_id: int, payload: TagPatch) -> dict:

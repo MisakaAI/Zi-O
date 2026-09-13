@@ -144,7 +144,7 @@ Note 是核心时间事件。`archive_no` 由独立计数器分配，只增不�
       |
       +--> category IDs exist; exactly one primary
       +--> Item IDs exist; public Note links only public Items
-      +--> Tag IDs exist
+      +--> extract #标签 from body text; reuse or create Tag IDs
       +--> ended_at >= started_at; static_path is relative .html
       |
       v
@@ -230,7 +230,7 @@ Note 正文统一保存 Tiptap 生成的 HTML；About 仍保存可选的 Markdow
 关联表使用外键并在 Note 删除时级联清理。Category 删除受限制；Item 删除会清理
 `note_items` 关联，但不会删除 Note。`settings.current_note_id` 在目标 Note 删除后置空。
 
-## 8. 静态页与海报文件
+## 8. 静态页、海报与正文图片
 
 ```text
   GET /page/{note_id}
@@ -248,6 +248,8 @@ Note 正文统一保存 Tiptap 生成的 HTML；About 仍保存可选的 Markdow
 
 静态页目录不会通过 `StaticFiles` 挂载。公共海报接口只接受公开 Item；管理海报接口
 需要 session。上传会限制请求大小并检查声明类型与文件签名，文件名由随机 UUID 生成。
+
+正文图片保存在独立 `uploads` 根目录，`content_images` 记录随机文件名，`note_images` 在 Note 保存事务中从正文的站内图片 URL 同步。`/api/content-images/{id}` 对管理员开放；访客请求还必须存在引用该图片且满足公共 Note 纵深隐私条件的关联记录。
 
 ## 9. 关键配置和启动顺序
 

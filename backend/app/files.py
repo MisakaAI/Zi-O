@@ -37,19 +37,23 @@ def resolve_static(root: Path, relative: str, max_bytes: int) -> Path:
     return path_real
 
 
-def resolve_cover(root: Path, relative: str) -> Path:
+def resolve_upload(root: Path, relative: str, *, error_code: str = "image_not_found") -> Path:
     if not relative or Path(relative).is_absolute() or ".." in Path(relative).parts or "\\" in relative:
-        raise AppError("poster_not_found", "poster is not available", 404)
+        raise AppError(error_code, "image is not available", 404)
     candidate = root / relative
     try:
         root_real = root.resolve(strict=True)
         path_real = candidate.resolve(strict=True)
         path_real.relative_to(root_real)
     except (FileNotFoundError, OSError, RuntimeError, ValueError) as exc:
-        raise AppError("poster_not_found", "poster is not available", 404) from exc
+        raise AppError(error_code, "image is not available", 404) from exc
     if not path_real.is_file():
-        raise AppError("poster_not_found", "poster is not available", 404)
+        raise AppError(error_code, "image is not available", 404)
     return path_real
+
+
+def resolve_cover(root: Path, relative: str) -> Path:
+    return resolve_upload(root, relative, error_code="poster_not_found")
 
 
 def safe_remove(root: Path, relative: str | None) -> None:

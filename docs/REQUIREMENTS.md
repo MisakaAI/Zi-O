@@ -125,7 +125,7 @@ Note 与 Item 是多对多关系，推荐使用：
 
 ### 4.5 Tag
 
-普通标签使用 `tags` 和 `note_tags` 多对多关系。标签名与 slug 唯一；slug 的生成和冲突策略必须确定且可测试。
+普通标签使用 `tags` 和 `note_tags` 多对多关系。管理端在正文中使用 `#标签` 输入普通标签，保存时自动复用或创建标签并同步关联；标签名与 slug 唯一，slug 的生成和冲突策略必须确定且可测试。单条 Note 不限制标签数量；公开页面将标签显示为 signal 洋红链接，并支持选择多个标签按交集筛选。
 
 ### 4.6 建议的 SQLite 表
 
@@ -152,6 +152,7 @@ Note 与 Item 是多对多关系，推荐使用：
 - HTML 必须经过 `nh3` 白名单清理后再返回前端。
 - 默认禁止脚本、事件处理属性、危险 URL scheme 和可触发跨站内容的标签/属性。
 - 前端不得用未清理的数据调用 `v-html`。
+- 管理端正文编辑器支持上传 JPEG、PNG、WebP 图片和直接编辑 HTML 源代码。正文图片必须通过鉴权入口读取；未被有效公开 Note 引用的图片不得向访客开放。
 
 ### 5.2 静态网页高级模式
 
@@ -186,7 +187,7 @@ URL 以稳定 ID 为主，slug 仅用于可读性，标题修改后仍可访问�
 - Note 新建、编辑、删除、查看。
 - Item 新建、编辑、可见性变更与关联 Note 管理。
 - Category、Tag 管理。
-- Note 编辑器支持正文、起止时间、主/次分类、Item 关联及上下文、Tag、可见性、静态路径。
+- Note 编辑器支持正文中的 `#标签`、图片上传、HTML 源代码、起止时间、主/次分类、Item 关联及上下文、可见性、静态路径。
 - 桌面端正文与属性并列；窄屏上属性区排到正文后。
 
 删除必须有明确确认；关联数据删除规则使用外键约束并有测试，不能留下孤儿记录。
@@ -287,7 +288,7 @@ URL 以稳定 ID 为主，slug 仅用于可读性，标题修改后仍可访问�
 ### 9.2 已批准第三方依赖
 
 - 栈内依赖：Vue 3、Vue Router、Vite、FastAPI。
-- 本次新增批准：`uvicorn`、`markdown-it-py`、`nh3`、`@tiptap/vue-3`、`@tiptap/pm`、`@tiptap/starter-kit`。
+- 本次新增批准：`uvicorn`、`markdown-it-py`、`nh3`、`@tiptap/vue-3`、`@tiptap/pm`、`@tiptap/starter-kit`、`@tiptap/extension-image`。
 
 除此以外，任何非标准库、npm 包或 Python 包，在加入前必须先获得用户确认。不得顺手加入 Pinia、Axios、Tailwind、组件库、日期库、ORM、迁移框架或测试框架。
 

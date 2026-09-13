@@ -17,7 +17,7 @@ from .config import Settings
 from .db.connection import connect
 from .db.migrations import migrate
 from .errors import AppError
-from .files import resolve_static
+from .files import resolve_static, resolve_upload
 from .repositories import content as repo
 
 
@@ -64,6 +64,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/health", tags=["ops"])
     def health():
         return {"ok": True, "service": "zio", "version": "0.1.0"}
+
+    @app.get("/api/content-images/{image_id}", tags=["content"])
+    def content_image(image_id: str, request: Request, db=Depends(get_db)):
+        if len(image_id) != 32 or any(character not in "0123456789abcdef" for character in image_id):
+            raise AppError("image_not_found", "image not found", 404)
+        from .services.auth import COOKIE_NAME, current_user
+
+        administrator = current_user(db, request.cookies.get(COOKIE_NAME))
+        row = repo.get_content_image(db, image_id, public=administrator is None)
+        if row is None:
+            raise AppError("image_not_found", "image not found", 404)
+        path = resolve_upload(settings.uploads_root, row["storage_path"])
+        return FileResponse(
+            path,
+            media_type=row["media_type"],
+            headers={"Cache-Control": "private, no-store" if administrator else "public, max-age=300"},
+        )
 
     @app.get("/page/{note_id}", include_in_schema=True)
     def static_page(note_id: int, request: Request, db=Depends(get_db)):
