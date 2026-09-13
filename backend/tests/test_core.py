@@ -84,6 +84,16 @@ class CoreTests(unittest.TestCase):
         rows = __import__("app.repositories.content", fromlist=["timeline_rows"]).timeline_rows(self.db, public=True, limit=20)
         self.assertEqual(rows, [])
 
+    def test_public_calendar_uses_site_timezone_and_filters_private_notes(self):
+        self.note(title="late January", started_at="2024-01-31T16:30:00Z", visibility="public")
+        self.note(title="February", started_at="2024-02-01T08:00:00Z", visibility="public")
+        self.note(title="private", started_at="2024-02-01T09:00:00Z", visibility="private")
+        private_item = content.create_item(self.db, ItemWrite(category_id=2, title="Hidden", visibility="private"))
+        hidden_link = self.note(title="hidden item", started_at="2024-02-01T10:00:00Z", visibility="public")
+        self.db.execute("INSERT INTO note_items(note_id,item_id) VALUES(?,?)", (hidden_link["id"], private_item["id"]))
+        days = content.public_calendar(self.db, 2024, 2, "Asia/Shanghai")
+        self.assertEqual(days, [{"date": "2024-02-01", "count": 2}])
+
     def test_public_note_rejects_private_item_link(self):
         private_item = content.create_item(self.db, ItemWrite(category_id=2, title="Hidden", visibility="private"))
         with self.assertRaises(AppError) as caught:

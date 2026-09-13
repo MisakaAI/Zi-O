@@ -97,6 +97,13 @@ def timeline_rows(
     ).fetchall()
 
 
+def public_calendar_starts(db: sqlite3.Connection, start_ms: int, end_ms: int) -> list[sqlite3.Row]:
+    return db.execute(
+        f"SELECT n.started_at FROM notes n WHERE {PUBLIC_NOTE_SQL} AND n.started_at >= ? AND n.started_at < ?",
+        (start_ms, end_ms),
+    ).fetchall()
+
+
 def public_item_activity(db: sqlite3.Connection, item_id: int) -> int | None:
     row = db.execute(
         f"""SELECT MAX(n.started_at) AS activity FROM notes n JOIN note_items ni ON ni.note_id=n.id

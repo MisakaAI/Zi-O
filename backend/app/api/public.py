@@ -69,6 +69,16 @@ def now(request: Request, db=Depends(get_db)):
     }
 
 
+@router.get("/calendar")
+def calendar(
+    year: int = Query(..., ge=1, le=9998),
+    month: int = Query(..., ge=1, le=12),
+    db=Depends(get_db),
+):
+    settings = repo.setting_row(db)
+    return {"year": year, "month": month, "days": service.public_calendar(db, year, month, settings["timezone"])}
+
+
 @router.get("/timeline")
 def timeline(
     request: Request,

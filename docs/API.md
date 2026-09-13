@@ -20,6 +20,7 @@
 
 - `GET /api/public/site` 返回站点标题、标语、时区、状态和经过清理的 About HTML。
 - `GET /api/public/now` 返回服务器时间、时区、状态、可选的手动选中 `current_signal`，以及当天的公开 Note（没有当天记录时返回最近 5 条）。
+- `GET /api/public/calendar?year=YYYY&month=MM` 返回站点时区下当月有公开事件的日期与数量：`{year,month,days:[{date,count}]}`。
 - `GET /api/public/timeline?cursor=&limit=&category=&tag=&item_id=` 返回 `{items,next_cursor}`。排序为 `(started_at DESC,id DESC)`。游标经过签名处理、保持不透明且与查询条件绑定，不得编辑。
 - `GET /api/public/notes/{id}` 返回经过清理的 Note 详情。
 - `GET /api/public/items?category=` 返回公开 Item，并按可见的关联活动排序。

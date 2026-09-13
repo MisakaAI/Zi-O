@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, provide, ref } from 'vue'
+import { RiTranslate } from '@remixicon/vue'
 import { get, post } from './api/client'
-import translateIcon from './assets/icons/translate.svg?no-inline'
 import { useI18n } from './i18n'
 
 const site = ref({ site_title: 'ZI/O', site_tagline: '' })
@@ -28,9 +28,7 @@ onMounted(loadSession)
         <RouterLink to="/about">{{ t('nav.about') }}</RouterLink>
       </nav>
       <button type="button" class="locale-switcher" :aria-label="t('language.switch')" :title="t('language.switch')" @click="toggleLocale">
-        <svg class="locale-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
-          <use :href="`${translateIcon}#translate-icon`" fill="currentColor"></use>
-        </svg>
+        <RiTranslate className="locale-icon" aria-hidden="true" focusable="false" />
       </button>
       <div class="session-nav">
         <span v-if="displayName" class="mono">{{ displayName }}</span>

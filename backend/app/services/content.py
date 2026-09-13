@@ -10,7 +10,7 @@ from ..errors import AppError
 from ..repositories import content as repo
 from ..rendering import render_content
 from ..schemas import CategoryLink, ItemLink, ItemPatch, ItemWrite, NotePatch, NoteWrite, SettingsPatch, TagPatch, TagWrite
-from ..timeutil import iso_utc, now_ms, parse_utc_ms
+from ..timeutil import iso_utc, local_date_key, local_month_bounds, now_ms, parse_utc_ms
 
 
 def _required_row(row: sqlite3.Row | None, code: str, message: str) -> sqlite3.Row:
@@ -124,6 +124,15 @@ def note_dict(db: sqlite3.Connection, row: sqlite3.Row, *, include_raw: bool) ->
     elif row["static_path"]:
         result["static_url"] = f"/page/{row['id']}"
     return result
+
+
+def public_calendar(db: sqlite3.Connection, year: int, month: int, timezone_name: str) -> list[dict]:
+    start_ms, end_ms = local_month_bounds(year, month, timezone_name)
+    counts: dict[str, int] = {}
+    for row in repo.public_calendar_starts(db, start_ms, end_ms):
+        date_key = local_date_key(row["started_at"], timezone_name)
+        counts[date_key] = counts.get(date_key, 0) + 1
+    return [{"date": date_key, "count": counts[date_key]} for date_key in sorted(counts)]
 
 
 def item_dict(db: sqlite3.Connection, row: sqlite3.Row, *, public: bool) -> dict:
