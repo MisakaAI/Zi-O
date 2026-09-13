@@ -3,6 +3,7 @@ import { computed, inject, onMounted, onUnmounted, ref } from 'vue'
 import { get } from '../api/client'
 import CalendarCard from '../components/CalendarCard.vue'
 import NoteCard from '../components/NoteCard.vue'
+import ReferenceIndex from '../components/ReferenceIndex.vue'
 import StateMessage from '../components/StateMessage.vue'
 import { useI18n } from '../i18n'
 const data = ref(null)
@@ -43,6 +44,7 @@ onUnmounted(() => clearInterval(timer))
         <NoteCard v-for="note in data.recent_notes" :key="note.id" :note="note" />
       </div>
       <StateMessage v-if="!data.recent_notes.length" type="empty" :message="t('state.noPublicEvents')" />
+      <ReferenceIndex class="now-reference-index" />
     </template>
   </section>
 </template>

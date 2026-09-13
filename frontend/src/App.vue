@@ -24,7 +24,6 @@ onMounted(loadSession)
       <nav :aria-label="t('nav.primary')">
         <RouterLink to="/now">{{ t('nav.now') }}</RouterLink>
         <RouterLink to="/log">{{ t('nav.log') }}</RouterLink>
-        <RouterLink to="/index">{{ t('nav.index') }}</RouterLink>
         <RouterLink to="/about">{{ t('nav.about') }}</RouterLink>
       </nav>
       <button type="button" class="locale-switcher" :aria-label="t('language.switch')" :title="t('language.switch')" @click="toggleLocale">
