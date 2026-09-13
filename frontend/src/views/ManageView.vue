@@ -129,7 +129,13 @@ onMounted(load)
               <label>{{ t('manage.fields.endedAt') }}<input v-model="noteForm.ended_at" type="datetime-local" :min="noteForm.started_at"></label>
               <div class="field-pair">
                 <label>{{ t('manage.fields.primaryCategory') }}<select v-model="noteForm.category_id" required><option v-for="category in categories" :key="category.id" :value="category.id">{{ displayCategory(category) }}</option></select></label>
-                <label>{{ t('manage.fields.visibility') }}<select v-model="noteForm.visibility"><option value="private">{{ t('common.private') }}</option><option value="public">{{ t('common.public') }}</option></select></label>
+                <div class="segmented-field">
+                  <span class="field-label">{{ t('manage.fields.visibility') }}</span>
+                  <div class="segmented-control" role="group" :aria-label="t('manage.fields.visibility')">
+                    <button type="button" class="segmented-button" :class="{ active: noteForm.visibility === 'private' }" :aria-pressed="noteForm.visibility === 'private'" :disabled="saving" @click="noteForm.visibility = 'private'">{{ t('common.private') }}</button>
+                    <button type="button" class="segmented-button" :class="{ active: noteForm.visibility === 'public' }" :aria-pressed="noteForm.visibility === 'public'" :disabled="saving" @click="noteForm.visibility = 'public'">{{ t('common.public') }}</button>
+                  </div>
+                </div>
               </div>
               <details class="editor-disclosure">
                 <summary>{{ t('manage.links') }}</summary>
@@ -165,7 +171,13 @@ onMounted(load)
           <label>{{ t('manage.fields.title') }}<input v-model="itemForm.title" required maxlength="200"></label>
           <label>{{ t('manage.fields.subtitle') }}<input v-model="itemForm.subtitle"></label>
           <label>{{ t('manage.fields.creator') }}<input v-model="itemForm.creator"></label>
-          <label>{{ t('manage.fields.visibility') }}<select v-model="itemForm.visibility"><option value="private">{{ t('common.private') }}</option><option value="public">{{ t('common.public') }}</option></select></label>
+          <div class="segmented-field">
+            <span class="field-label">{{ t('manage.fields.visibility') }}</span>
+            <div class="segmented-control" role="group" :aria-label="t('manage.fields.visibility')">
+              <button type="button" class="segmented-button" :class="{ active: itemForm.visibility === 'private' }" :aria-pressed="itemForm.visibility === 'private'" :disabled="saving" @click="itemForm.visibility = 'private'">{{ t('common.private') }}</button>
+              <button type="button" class="segmented-button" :class="{ active: itemForm.visibility === 'public' }" :aria-pressed="itemForm.visibility === 'public'" :disabled="saving" @click="itemForm.visibility = 'public'">{{ t('common.public') }}</button>
+            </div>
+          </div>
           <p class="field-help">{{ t('manage.itemPrivacyHint') }}</p><label>{{ t('manage.fields.metadataJson') }}<textarea v-model="itemForm.metadata_json_text" rows="6" spellcheck="false"></textarea></label>
           <label>{{ t('manage.fields.poster') }}<input type="file" accept="image/jpeg,image/png,image/webp" @change="posterFile = $event.target.files[0] || null"></label>
           <div class="button-row"><button class="primary-button" :disabled="saving">{{ saving ? t('common.saving') : editingItemId ? t('manage.buttons.updateItem') : t('manage.buttons.saveItem') }}</button><button v-if="editingItemId" type="button" class="link-button" @click="resetItem">{{ t('common.cancel') }}</button></div>
