@@ -6,7 +6,9 @@ import TimelineList from '../components/TimelineList.vue'
 import StateMessage from '../components/StateMessage.vue'
 import { useI18n } from '../i18n'
 const route = useRoute(); const data = ref(null); const loading = ref(true); const error = ref(null)
+const loadingMore = ref(false); const moreError = ref(null)
 const { t, errorKey } = useI18n()
+const localizedMoreError = computed(() => moreError.value ? t(errorKey(moreError.value)) : '')
 const localizedError = computed(() => error.value ? t(errorKey(error.value)) : '')
 async function load(slug) {
   data.value = null; loading.value = true; error.value = null
@@ -20,6 +22,6 @@ async function load(slug) {
   }
 }
 watch(() => route.params.slug, load, { immediate: true })
-async function loadMore() { if (!data.value?.next_cursor) return; try { const next = await get(`/api/public/tags/${encodeURIComponent(route.params.slug)}?cursor=${encodeURIComponent(data.value.next_cursor)}`); data.value.items.push(...next.items); data.value.next_cursor = next.next_cursor } catch (err) { error.value = err } }
+async function loadMore() { if (!data.value?.next_cursor) return; if (loadingMore.value) return; loadingMore.value = true; moreError.value = null; try { const next = await get(`/api/public/tags/${encodeURIComponent(route.params.slug)}?cursor=${encodeURIComponent(data.value.next_cursor)}`); data.value.items.push(...next.items); data.value.next_cursor = next.next_cursor } catch (err) { moreError.value = err } finally { loadingMore.value = false } }
 </script>
-<template><section><StateMessage v-if="loading" type="loading" :message="t('state.readingTag')" /><StateMessage v-else-if="error" type="error" :message="localizedError" /><template v-else><div class="section-heading"><div class="eyebrow mono">{{ t('tag.eyebrow', { slug: data.tag.slug }) }}</div><h1>#{{ data.tag.name }}</h1></div><TimelineList :notes="data.items" :next-cursor="data.next_cursor" @load-more="loadMore" /></template></section></template>
+<template><section><StateMessage v-if="loading" type="loading" :message="t('state.readingTag')" /><StateMessage v-else-if="error" type="error" :message="localizedError" /><template v-else><div class="section-heading"><div class="eyebrow mono">{{ t('tag.eyebrow', { slug: data.tag.slug }) }}</div><h1>#{{ data.tag.name }}</h1></div><TimelineList :notes="data.items" :next-cursor="data.next_cursor" :loading="loadingMore" :error="localizedMoreError" @load-more="loadMore" /></template></section></template>

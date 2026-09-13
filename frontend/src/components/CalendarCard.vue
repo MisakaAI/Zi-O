@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { RiArrowDropLeftLine, RiArrowDropRightLine } from '@remixicon/vue'
 import { get } from '../api/client'
 import { useI18n } from '../i18n'
@@ -20,7 +20,6 @@ const yearPickerYear = ref(0)
 const yearCalendarCounts = ref({})
 const yearCalendarLoading = ref(false)
 const yearCalendarError = ref(null)
-const calendarRoot = ref(null)
 const titleButton = ref(null)
 const yearPickerDialog = ref(null)
 let requestSerial = 0
@@ -132,7 +131,7 @@ const localizedYearError = computed(() => yearCalendarError.value ? t(errorKey(y
 
 function dayLabel(day) {
   const dateLabel = d(dateObject(day.date), { dateStyle: 'full' }, 'UTC')
-  return day.count ? `${dateLabel} · ${t('now.calendarEvents', { count: day.count })}` : `${dateLabel} · ${t('now.calendarNoEvents')}`
+  return day.count ? `${dateLabel} · ${t('now.calendarEvents', { count: day.count })}` : `${dateLabel} · ${t('now.calendarNoDayEvents')}`
 }
 
 async function loadMonth() {
@@ -206,7 +205,7 @@ function toggleYearPicker() {
   yearPickerYear.value = currentYear.value
   yearPickerOpen.value = true
   loadYear(yearPickerYear.value)
-  nextTick(() => yearPickerDialog.value?.focus())
+  nextTick(() => { yearPickerDialog.value?.showModal(); yearPickerDialog.value?.focus() })
 }
 
 function moveYear(offset) {
@@ -228,10 +227,6 @@ function chooseYearMonth(key) {
   closeYearPicker(true)
 }
 
-function closeYearPickerOnOutsideClick(event) {
-  if (yearPickerOpen.value && !calendarRoot.value?.contains(event.target)) closeYearPicker()
-}
-
 watch(currentMonth, (next) => {
   if (!month.value) {
     month.value = next
@@ -245,14 +240,12 @@ watch(currentMonth, (next) => {
 onMounted(() => {
   month.value = currentMonth.value
   loadMonth()
-  document.addEventListener('pointerdown', closeYearPickerOnOutsideClick)
 })
 
-onUnmounted(() => document.removeEventListener('pointerdown', closeYearPickerOnOutsideClick))
 </script>
 
 <template>
-  <section ref="calendarRoot" class="calendar-panel" :aria-busy="loading" @keydown.esc="closeYearPicker(true)">
+  <section class="calendar-panel" :aria-busy="loading">
     <header class="calendar-header">
       <div>
         <h2 class="calendar-heading">
@@ -261,7 +254,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeYearPickerOnO
             :id="`calendar-title-${month}`"
             type="button"
             class="calendar-title calendar-title-button"
-            :aria-label="t('now.calendarSelectMonth')"
+            :aria-label="`${monthLabel} · ${t('now.calendarSelectMonth')}`"
             :aria-expanded="yearPickerOpen"
             aria-controls="calendar-year-picker"
             @click="toggleYearPicker"
@@ -283,8 +276,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeYearPickerOnO
       </div>
     </header>
 
-    <div v-if="yearPickerOpen" class="calendar-year-backdrop" @click.self="closeYearPicker()">
-      <section
+      <dialog v-if="yearPickerOpen"
         id="calendar-year-picker"
         ref="yearPickerDialog"
         class="calendar-year-picker"
@@ -293,7 +285,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeYearPickerOnO
         :aria-labelledby="`calendar-year-heading-${yearPickerYear}`"
         :aria-busy="yearCalendarLoading"
         tabindex="-1"
-        @keydown.esc.stop.prevent="closeYearPicker(true)"
+        @cancel.prevent="closeYearPicker(true)"
       >
         <header class="calendar-year-header">
           <h2 :id="`calendar-year-heading-${yearPickerYear}`" class="calendar-year-value mono">{{ yearPickerYear }}</h2>
@@ -307,6 +299,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeYearPickerOnO
             <button type="button" class="calendar-control" :aria-label="t('now.calendarNextYear')" :disabled="yearPickerYear >= 9998" @click="moveYear(1)">
               <RiArrowDropRightLine aria-hidden="true" focusable="false" />
             </button>
+            <button type="button" class="calendar-control calendar-close" :aria-label="t('common.close')" @click="closeYearPicker(true)"><span aria-hidden="true">×</span></button>
           </div>
         </header>
 
@@ -348,7 +341,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeYearPickerOnO
             <div class="calendar-year-weekdays" aria-hidden="true">
               <span v-for="weekday in weekdayLabels" :key="weekday" class="calendar-year-weekday mono">{{ weekday }}</span>
             </div>
-            <div class="calendar-year-days" role="grid" :aria-label="monthOption.fullLabel">
+            <div class="calendar-year-days" role="group" :aria-label="monthOption.fullLabel">
               <span
                 v-for="day in monthOption.days"
                 :key="day.slot"
@@ -358,7 +351,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeYearPickerOnO
                   day.level ? `calendar-year-day-level-${day.level}` : '',
                   { 'calendar-year-day-today': day.isToday },
                 ]"
-                role="gridcell"
+                role="group"
                 :aria-label="dayLabel(day)"
                 :title="dayLabel(day)"
               >
@@ -367,13 +360,12 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeYearPickerOnO
             </div>
           </section>
         </div>
-      </section>
-    </div>
+      </dialog>
 
     <div class="calendar-weekdays" aria-hidden="true">
       <span v-for="weekday in weekdayLabels" :key="weekday" class="calendar-weekday mono">{{ weekday }}</span>
     </div>
-    <div class="calendar-grid" role="grid" :aria-labelledby="`calendar-title-${month}`">
+    <div class="calendar-grid" role="group" :aria-labelledby="`calendar-title-${month}`">
       <div
         v-for="day in calendarDays"
         :key="day.slot"
@@ -383,7 +375,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeYearPickerOnO
           day.level ? `calendar-day-level-${day.level}` : '',
           { 'calendar-day-today': day.isToday },
         ]"
-        role="gridcell"
+        role="group"
         :aria-label="dayLabel(day)"
         :title="dayLabel(day)"
       >
