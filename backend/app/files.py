@@ -1,3 +1,5 @@
+"""安全解析和删除静态页,封面及正文图片文件."""
+
 from __future__ import annotations
 
 from contextlib import suppress
@@ -7,6 +9,7 @@ from .errors import AppError
 
 
 def resolve_static(root: Path, relative: str, max_bytes: int) -> Path:
+    """解析静态 HTML 文件,并拒绝穿越,符号链接,目录和超大文件."""
     if not relative or relative.startswith("/") or "\\" in relative or "\x00" in relative or any(part in {"", ".", ".."} for part in relative.split("/")):
         raise AppError("static_page_not_found", "static page is not available", 404)
     candidate = root / relative
@@ -38,6 +41,7 @@ def resolve_static(root: Path, relative: str, max_bytes: int) -> Path:
 
 
 def resolve_upload(root: Path, relative: str, *, error_code: str = "image_not_found") -> Path:
+    """解析受管理上传文件,确保文件存在且真实路径仍位于存储根目录内."""
     if not relative or Path(relative).is_absolute() or ".." in Path(relative).parts or "\\" in relative:
         raise AppError(error_code, "image is not available", 404)
     candidate = root / relative
@@ -53,10 +57,12 @@ def resolve_upload(root: Path, relative: str, *, error_code: str = "image_not_fo
 
 
 def resolve_cover(root: Path, relative: str) -> Path:
+    """使用封面专用错误码解析 Item 封面文件."""
     return resolve_upload(root, relative, error_code="poster_not_found")
 
 
 def safe_remove(root: Path, relative: str | None) -> None:
+    """仅删除经过安全解析的旧文件;路径无效或文件已不存在时静默跳过."""
     if not relative:
         return
     try:

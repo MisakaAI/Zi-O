@@ -1,3 +1,5 @@
+"""读取并校验 ZI/O 运行配置,同时准备应用所需的数据目录."""
+
 from __future__ import annotations
 
 import os
@@ -7,11 +9,14 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 def _path(value: str) -> Path:
+    """将环境变量中的路径展开为规范化的绝对路径."""
     return Path(value).expanduser().resolve()
 
 
 @dataclass(frozen=True)
 class Settings:
+    """应用运行时配置;实例不可变,避免请求处理过程中被意外修改."""
+
     environment: str
     database_path: Path
     static_pages_root: Path
@@ -29,6 +34,7 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> Settings:
+        """从环境变量构造配置,并校验生产密钥和时区是否合法."""
         environment = os.getenv("ZIO_ENV", "development").lower()
         database_path = _path(os.getenv("ZIO_DATABASE_PATH", "./data/zio.sqlite3"))
         static_pages_root = _path(os.getenv("ZIO_STATIC_PAGES_ROOT", "./data/static-pages"))
@@ -62,6 +68,7 @@ class Settings:
         )
 
     def ensure_directories(self) -> None:
+        """创建数据库,静态页,封面和正文图片所需的父目录."""
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
         self.static_pages_root.mkdir(parents=True, exist_ok=True)
         self.covers_root.mkdir(parents=True, exist_ok=True)

@@ -1,2 +1,1 @@
-"""ZI/O application package."""
-
+"""ZI/O 后端应用包,集中承载 API,领域规则,数据访问和安全逻辑."""

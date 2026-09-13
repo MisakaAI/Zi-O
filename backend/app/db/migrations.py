@@ -1,3 +1,5 @@
+"""发现并按版本顺序执行数据库迁移."""
+
 from __future__ import annotations
 
 import re
@@ -9,6 +11,7 @@ MIGRATION_RE = re.compile(r"^(?P<version>\d{4})_[^/]+\.sql$")
 
 
 def migration_files(root: Path) -> list[tuple[int, Path]]:
+    """返回符合四位版本命名约定的迁移文件,并按文件名排序."""
     files: list[tuple[int, Path]] = []
     for path in sorted(root.glob("*.sql")):
         match = MIGRATION_RE.match(path.name)
@@ -18,6 +21,7 @@ def migration_files(root: Path) -> list[tuple[int, Path]]:
 
 
 def migrate(database_path: Path, migrations_root: Path) -> None:
+    """把尚未登记的迁移应用到数据库,并写入版本账本."""
     database_path.parent.mkdir(parents=True, exist_ok=True)
     files = migration_files(migrations_root)
     with connect(database_path) as db:
@@ -28,8 +32,7 @@ def migrate(database_path: Path, migrations_root: Path) -> None:
                 continue
             sql = path.read_text(encoding="utf-8")
             try:
-                # executescript commits any pending transaction before running;
-                # put the migration and its ledger row in one explicit script transaction.
+                # executescript 会先提交挂起事务,因此显式把迁移和账本记录包在同一事务中.
                 db.executescript(
                     "BEGIN IMMEDIATE;\n"
                     + sql

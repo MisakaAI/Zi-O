@@ -1,3 +1,5 @@
+"""核心业务规则的后端回归测试,覆盖迁移,时间线,可见性和内容关联."""
+
 from __future__ import annotations
 
 import asyncio
@@ -20,22 +22,28 @@ from app.services.auth import create_admin, current_user, login
 
 
 class CoreTests(unittest.TestCase):
+    """使用临时 SQLite 数据库验证后端核心业务行为."""
+
     def setUp(self):
+        """为每个测试创建独立临时目录,数据库连接并执行全部迁移."""
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.db = connect(self.root / "test.sqlite3")
         migrate(self.root / "test.sqlite3", Path(__file__).parents[1] / "migrations")
 
     def tearDown(self):
+        """关闭数据库并删除当前测试的临时目录."""
         self.db.close()
         self.temp.cleanup()
 
     def note(self, **overrides):
+        """用默认私密时间和标题创建测试 Note,并允许覆盖字段."""
         values = {"started_at": "2024-01-01T00:00:00Z", "visibility": "private", "title": "event"}
         values.update(overrides)
         return content.create_note(self.db, NoteWrite(**values))
 
     def test_migration_and_archive_numbers(self):
+        """验证空库迁移,根分类,稳定 archive_no,重复迁移和外键约束."""
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM categories WHERE is_root=1").fetchone()[0], 5)
         note_columns = {row["name"] for row in self.db.execute("PRAGMA table_info(notes)")}
         self.assertNotIn("content_format", note_columns)
@@ -58,6 +66,7 @@ class CoreTests(unittest.TestCase):
             self.db.execute("INSERT INTO note_items(note_id,item_id) VALUES(999,999)")
 
     def test_cursor_ordering_query(self):
+        """验证相同 started_at 时按 id 倒序,并可从联合游标继续读取."""
         self.note(title="one", started_at="2024-01-01T00:00:00Z", visibility="public")
         self.note(title="two", started_at="2024-01-01T00:00:00Z", visibility="public")
         self.note(title="three", started_at="2023-01-01T00:00:00Z", visibility="public")
@@ -67,6 +76,7 @@ class CoreTests(unittest.TestCase):
         self.assertEqual([row["title"] for row in rows], ["three"])
 
     def test_manage_note_cursor_reaches_older_records(self):
+        """验证管理端超过单页上限时能通过签名游标读取更旧记录."""
         for index in range(51):
             self.note(title=str(index), started_at=f"2024-01-01T00:00:{index:02d}Z")
         request = SimpleNamespace(
@@ -80,6 +90,7 @@ class CoreTests(unittest.TestCase):
         self.assertIsNone(second["next_cursor"])
 
     def test_item_private_cascade_and_explicit_publish(self):
+        """验证 Item 私密化级联 Note,而公开化和批量公开均需显式执行."""
         book = content.create_item(self.db, ItemWrite(category_id=2, title="Book", visibility="public"))
         note = self.note(items=[ItemLink(item_id=book["id"])])
         content.update_note(self.db, note["id"], NotePatch(visibility="public"))
@@ -92,6 +103,7 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(self.db.execute("SELECT visibility FROM notes WHERE id=?", (note["id"],)).fetchone()[0], "public")
 
     def test_public_filter_defense(self):
+        """验证公共时间线会排除关联任何私密 Item 的 Note."""
         public_item = content.create_item(self.db, ItemWrite(category_id=2, title="Visible", visibility="public"))
         private_item = content.create_item(self.db, ItemWrite(category_id=2, title="Hidden", visibility="private"))
         note = self.note(visibility="public", items=[ItemLink(item_id=public_item["id"])])
@@ -100,6 +112,7 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(rows, [])
 
     def test_public_calendar_uses_site_timezone_and_filters_private_notes(self):
+        """验证日历按站点时区归日,并排除私密 Note 和私密 Item 关联."""
         self.note(title="late January", started_at="2024-01-31T16:30:00Z", visibility="public")
         self.note(title="February", started_at="2024-02-01T08:00:00Z", visibility="public")
         self.note(title="private", started_at="2024-02-01T09:00:00Z", visibility="private")
@@ -110,18 +123,21 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(days, [{"date": "2024-02-01", "count": 2}])
 
     def test_public_note_rejects_private_item_link(self):
+        """验证创建公开 Note 时不能关联私密 Item."""
         private_item = content.create_item(self.db, ItemWrite(category_id=2, title="Hidden", visibility="private"))
         with self.assertRaises(AppError) as caught:
             self.note(visibility="public", items=[ItemLink(item_id=private_item["id"])])
         self.assertEqual(caught.exception.code, "private_item_link")
 
     def test_rendering_removes_xss(self):
+        """验证 HTML 清理会移除脚本,事件属性和 javascript URL."""
         html = render_content('<script>alert(1)</script><img src=x onerror=alert(1)><a href="javascript:bad()">x</a>')
         self.assertNotIn("script", html.lower())
         self.assertNotIn("onerror", html.lower())
         self.assertNotIn("javascript:", html.lower())
 
     def test_note_content_is_unified_sanitized_html(self):
+        """验证 Note 保留 HTML 原文,同时只返回清理后的渲染结果."""
         note = self.note(content_raw="<h2>Rich text</h2><p><strong>safe</strong><iframe src='https://example.com'></iframe></p>")
         self.assertEqual(note["content_raw"], "<h2>Rich text</h2><p><strong>safe</strong><iframe src='https://example.com'></iframe></p>")
         self.assertNotIn("content_format", note)
@@ -129,12 +145,14 @@ class CoreTests(unittest.TestCase):
         self.assertNotIn("iframe", note["content_html_sanitized"])
 
     def test_tag_slug_conflict(self):
+        """验证规范化名称不同但 slug 冲突时会生成递增后缀."""
         first = content.create_tag(self.db, TagWrite(name="Read later"))
         second = content.create_tag(self.db, TagWrite(name="Read-later"))
         self.assertEqual(first["slug"], "read-later")
         self.assertEqual(second["slug"], "read-later-2")
 
     def test_note_body_hashtags_create_and_sync_tags(self):
+        """验证正文 hashtag 自动创建/复用标签,并在正文更新后同步关联."""
         existing = content.create_tag(self.db, TagWrite(name="Python"))
         note = self.note(content_raw="<p>今天 <strong>#python</strong> 和 #读书。</p><pre>#code</pre><p>#读书 #new_tag</p>")
 
@@ -145,6 +163,7 @@ class CoreTests(unittest.TestCase):
         self.assertEqual([tag["name"] for tag in updated["tags"]], ["读书"])
 
     def test_note_body_hashtags_render_as_safe_links(self):
+        """验证已知 hashtag 生成安全链接,而代码内容和危险属性保持受保护."""
         note = self.note(content_raw='<p>#读书 <code>#code</code></p><img src="/api/content-images/deadbeef" onerror="x">')
 
         self.assertIn('class="hashtag-link" href="/tag/', note["content_html_sanitized"])
@@ -152,6 +171,7 @@ class CoreTests(unittest.TestCase):
         self.assertNotIn("onerror", note["content_html_sanitized"])
 
     def test_content_images_follow_note_visibility_and_sync(self):
+        """验证正文图片遵循 Note 有效公开权限,并随正文编辑同步关联."""
         image_id = "a" * 32
         self.db.execute(
             "INSERT INTO content_images(id,storage_path,media_type,created_at) VALUES(?,?,?,?)",
@@ -176,6 +196,7 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, "image_not_found")
 
     def test_multiple_tag_filter_requires_all_selected_tags(self):
+        """验证多个标签过滤采用交集语义,并在标签页中保留选择范围."""
         self.note(title="both", visibility="public", content_raw="<p>#one #two</p>")
         self.note(title="one", visibility="public", content_raw="<p>#one</p>")
         rows = __import__("app.repositories.content", fromlist=["timeline_rows"]).timeline_rows(
@@ -192,11 +213,13 @@ class CoreTests(unittest.TestCase):
         self.assertEqual([tag["slug"] for tag in response["tags"]], ["one", "two"])
 
     def test_content_image_upload_writes_random_managed_file(self):
+        """验证正文图片上传使用随机 ID,正确扩展名并写入受管理目录."""
         body = b"\x89PNG\r\n\x1a\ncontent"
         self_root = self.root
 
         class Request:
             def __init__(self):
+                """构造供上传端点使用的最小请求替身."""
                 self.headers = {"content-type": "image/png"}
                 self.app = SimpleNamespace(
                     state=SimpleNamespace(
@@ -207,6 +230,7 @@ class CoreTests(unittest.TestCase):
                 )
 
             async def stream(self):
+                """以单个异步分块提供测试图片内容."""
                 yield body
 
         result = asyncio.run(upload_content_image(request=Request(), db=self.db))
@@ -216,12 +240,14 @@ class CoreTests(unittest.TestCase):
         self.assertEqual((self.root / "uploads" / f'{result["id"]}.png').read_bytes(), body)
 
     def test_private_only_tag_is_not_in_public_index(self):
+        """验证只被私密 Note 使用的标签不会出现在公共标签索引."""
         tag = content.create_tag(self.db, TagWrite(name="Secret tag"))
         self.note(tag_ids=[tag["id"]], visibility="private")
         rows = __import__("app.repositories.content", fromlist=["public_tags"]).public_tags(self.db)
         self.assertEqual(rows, [])
 
     def test_password_and_session(self):
+        """验证管理员密码哈希,错误凭据和过期会话行为."""
         create_admin(self.db, "misaka", "secret123")
         token, user = login(self.db, "misaka", "secret123", 100)
         self.assertTrue(token)

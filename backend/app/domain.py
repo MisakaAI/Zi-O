@@ -1,3 +1,5 @@
+"""领域层的输入规范化,路径校验,slug 和 Item 元数据规则."""
+
 from __future__ import annotations
 
 import json
@@ -17,6 +19,7 @@ METADATA_KEYS: dict[str, dict[str, type | tuple[type, ...]]] = {
 
 
 def normalize_text(value: str, max_length: int, field: str, *, allow_empty: bool = True) -> str:
+    """去除首尾空白并执行字段的空值与长度限制."""
     value = value.strip()
     if not allow_empty and not value:
         raise AppError("invalid_input", f"{field} cannot be empty", 422)
@@ -26,6 +29,7 @@ def normalize_text(value: str, max_length: int, field: str, *, allow_empty: bool
 
 
 def validate_static_path(value: str | None) -> str | None:
+    """校验静态页路径必须是根目录内的规范相对 HTML 路径."""
     if value is None or value == "":
         return None
     if "\x00" in value or "\\" in value or value.startswith("/"):
@@ -42,6 +46,7 @@ def validate_static_path(value: str | None) -> str | None:
 
 
 def slugify(value: str) -> str:
+    """把显示名称转换为稳定,适合 URL 的小写 slug."""
     normalized = unicodedata.normalize("NFKC", value).casefold()
     pieces: list[str] = []
     for char in normalized:
@@ -54,10 +59,12 @@ def slugify(value: str) -> str:
 
 
 def name_key(value: str) -> str:
+    """生成用于大小写和 Unicode 规范化去重的名称键."""
     return unicodedata.normalize("NFKC", value).casefold().strip()
 
 
 def validate_metadata(root_code: str, value: dict) -> str:
+    """按 Item 根分类校验元数据字段,类型,范围和序列化大小."""
     if not isinstance(value, dict) or len(value) > 20:
         raise AppError("invalid_metadata", "metadata_json must be a small object", 422)
     allowed = METADATA_KEYS.get(root_code, {})
@@ -80,6 +87,7 @@ def validate_metadata(root_code: str, value: dict) -> str:
 
 
 def validate_timezone(value: str) -> str:
+    """确认时区名称可由系统的 IANA 时区数据库解析."""
     try:
         ZoneInfo(value)
     except ZoneInfoNotFoundError as exc:

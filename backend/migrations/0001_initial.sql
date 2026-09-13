@@ -1,3 +1,6 @@
+-- 初始数据库结构：建立单用户认证、站点设置、Note/Item 领域及多对多关联。
+
+-- 管理员账户和服务端会话；数据库只保存密码材料和会话令牌哈希。
 CREATE TABLE users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   username TEXT NOT NULL UNIQUE,
@@ -18,6 +21,7 @@ CREATE TABLE sessions (
 );
 CREATE INDEX sessions_expiry_idx ON sessions(expires_at);
 
+-- 单行站点设置；current_note_id 用于 NOW 页面展示当前 signal。
 CREATE TABLE settings (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   site_title TEXT NOT NULL DEFAULT 'ZI/O',
@@ -36,6 +40,7 @@ CREATE TABLE counters (
 );
 INSERT INTO counters(name, value) VALUES ('archive_no', 0);
 
+-- 分类树：五个根分类稳定，用户只能在根分类下增加子分类。
 CREATE TABLE categories (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   code TEXT NOT NULL UNIQUE,
@@ -63,6 +68,7 @@ CREATE TABLE notes (
 );
 CREATE INDEX notes_timeline_idx ON notes(started_at DESC, id DESC);
 
+-- Note 的分类关联；is_primary 保证业务层可以明确主分类。
 CREATE TABLE note_categories (
   note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
   category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE RESTRICT,
@@ -71,6 +77,7 @@ CREATE TABLE note_categories (
 );
 CREATE INDEX note_categories_category_idx ON note_categories(category_id, note_id);
 
+-- 长期档案 Item 及其分类专属 JSON 元数据。
 CREATE TABLE items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE RESTRICT,
@@ -85,6 +92,7 @@ CREATE TABLE items (
 );
 CREATE INDEX items_category_idx ON items(category_id, updated_at DESC);
 
+-- Note 与 Item 的多对多关联，并保存章节、版本、进度等上下文。
 CREATE TABLE note_items (
   note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
   item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
@@ -94,6 +102,7 @@ CREATE TABLE note_items (
 );
 CREATE INDEX note_items_item_idx ON note_items(item_id, note_id);
 
+-- 普通标签及 Note-Tag 多对多关联；name_key 和 slug 都必须唯一。
 CREATE TABLE tags (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,

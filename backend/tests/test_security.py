@@ -1,3 +1,5 @@
+"""安全边界回归测试,覆盖签名游标与文件路径逃逸防护."""
+
 from __future__ import annotations
 
 import tempfile
@@ -11,7 +13,10 @@ from app.security import make_cursor, read_cursor
 
 
 class SecurityTests(unittest.TestCase):
+    """验证后端不透明游标和受管理文件路径的安全约束."""
+
     def test_cursor_is_signed_and_scope_payload_is_preserved(self):
+        """验证游标签名不可篡改,并能保留查询作用域载荷."""
         token = make_cursor({"v": 1, "scope": {"tag": "x"}, "started_at": 1, "id": 2}, b"secret")
         self.assertEqual(read_cursor(token, b"secret")["id"], 2)
         with self.assertRaises(ValueError):
@@ -21,6 +26,7 @@ class SecurityTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, "cursor_invalid")
 
     def test_static_path_rejects_traversal_symlink_and_non_html(self):
+        """验证静态页拒绝穿越,规范化绕过,符号链接和非 HTML 文件."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "pages"
             root.mkdir()
@@ -34,6 +40,7 @@ class SecurityTests(unittest.TestCase):
                     resolve_static(root, path, 1024)
 
     def test_upload_path_rejects_traversal_and_symlink(self):
+        """验证上传文件解析拒绝穿越,绝对路径,符号链接和不存在文件."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "uploads"
             root.mkdir()

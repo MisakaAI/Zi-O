@@ -1,3 +1,5 @@
+"""管理员账户初始化,登录,会话查询和退出的业务服务."""
+
 from __future__ import annotations
 
 import sqlite3
@@ -12,10 +14,12 @@ COOKIE_NAME = "zio_session"
 
 
 def public_user(row: sqlite3.Row) -> dict:
+    """将管理员数据库行转换为不包含密码材料的公开身份对象."""
     return {"id": row["id"], "username": row["username"], "nickname": row["nickname"], "display_name": row["nickname"] or row["username"]}
 
 
 def create_admin(db: sqlite3.Connection, username: str, password: str, nickname: str = "") -> dict:
+    """校验并创建唯一管理员账户,数据库只保存 PBKDF2 密码材料."""
     username = username.strip()
     if not username or len(username) > 64:
         raise AppError("invalid_username", "username is invalid", 422)
@@ -34,6 +38,7 @@ def create_admin(db: sqlite3.Connection, username: str, password: str, nickname:
 
 
 def login(db: sqlite3.Connection, username: str, password: str, ttl_seconds: int) -> tuple[str, dict]:
+    """验证管理员凭据,按需升级密码参数并创建有过期时间的服务端会话."""
     row = user_by_username(db, username.strip())
     if row is None or not verify_password(password, row["password_hash"], row["password_salt"], row["password_iterations"]):
         raise AppError("invalid_credentials", "username or password is incorrect", 401)
@@ -48,6 +53,7 @@ def login(db: sqlite3.Connection, username: str, password: str, ttl_seconds: int
 
 
 def current_user(db: sqlite3.Connection, token: str | None) -> sqlite3.Row | None:
+    """根据 Cookie 令牌查询当前有效管理员;令牌格式异常时按未登录处理."""
     if not token:
         return None
     try:
@@ -58,6 +64,7 @@ def current_user(db: sqlite3.Connection, token: str | None) -> sqlite3.Row | Non
 
 
 def logout(db: sqlite3.Connection, token: str | None) -> None:
+    """删除当前会话令牌对应的数据库记录."""
     if token:
         with suppress(UnicodeEncodeError, ValueError):
             db.execute("DELETE FROM sessions WHERE token_hash=?", (token_hash(token),))

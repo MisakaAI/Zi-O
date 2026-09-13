@@ -1,3 +1,5 @@
+"""ZI/O 命令行入口,提供迁移,首次建管理员和在线备份命令."""
+
 from __future__ import annotations
 
 import argparse
@@ -13,6 +15,7 @@ from .services.auth import create_admin
 
 
 def parser() -> argparse.ArgumentParser:
+    """构造命令行参数解析器及其三个子命令."""
     result = argparse.ArgumentParser(prog="zio")
     sub = result.add_subparsers(dest="command", required=True)
     init = sub.add_parser("init-admin", help="create the first administrator")
@@ -25,6 +28,7 @@ def parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    """解析命令并执行迁移,管理员初始化或 SQLite 在线备份."""
     args = parser().parse_args()
     settings = Settings.from_env()
     settings.ensure_directories()
@@ -49,6 +53,7 @@ def main() -> int:
     if args.command == "backup":
         output = args.output.expanduser().resolve()
         output.parent.mkdir(parents=True, exist_ok=True)
+        # 使用 SQLite backup API 读取一致性快照,避免直接复制正在写入的数据库文件.
         source = sqlite3.connect(settings.database_path)
         destination = sqlite3.connect(output)
         try:
@@ -63,4 +68,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

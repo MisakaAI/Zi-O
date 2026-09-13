@@ -1,3 +1,5 @@
+"""访客可读取的站点,时间线,Item,标签和索引 API."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -15,6 +17,7 @@ router = APIRouter(prefix="/api/public", tags=["public"])
 
 
 def _cursor_scope(cursor: str | None, scope: dict, secret: bytes) -> tuple[int, int] | None:
+    """验证游标签名及查询范围,并提取时间线的联合排序位置."""
     if not cursor:
         return None
     try:
@@ -30,6 +33,7 @@ def _cursor_scope(cursor: str | None, scope: dict, secret: bytes) -> tuple[int, 
 
 
 def _unique_tag_slugs(values: list[str] | None) -> list[str]:
+    """去重并限制标签 slug,保留用户选择的顺序以生成稳定游标范围."""
     slugs: list[str] = []
     for value in values or []:
         if len(value) > 128:
@@ -40,6 +44,7 @@ def _unique_tag_slugs(values: list[str] | None) -> list[str]:
 
 
 def _timeline_response(db, request: Request, *, category_code=None, tag_slugs=None, item_id=None, cursor=None, limit=20):
+    """执行公共时间线查询并构造带签名 next_cursor 的统一响应."""
     tag_slugs = _unique_tag_slugs(tag_slugs)
     scope = {"category": category_code, "tags": tag_slugs, "item": item_id}
     position = _cursor_scope(cursor, scope, request.app.state.settings.secret_key)
@@ -63,11 +68,13 @@ def _timeline_response(db, request: Request, *, category_code=None, tag_slugs=No
 
 @router.get("/site")
 def site(db=Depends(get_db)):
+    """返回访客可见的站点标题,标语,时区,状态和清理后的 About."""
     return service.settings_dict(db, public=True)
 
 
 @router.get("/now")
 def now(request: Request, db=Depends(get_db)):
+    """返回当前服务时间,站点状态,当前 signal 及当天或最近的公开记录."""
     stamp = now_ms()
     settings = repo.setting_row(db)
     signal = None
@@ -94,6 +101,7 @@ def calendar(
     month: int = Query(..., ge=1, le=12),
     db=Depends(get_db),
 ):
+    """返回指定站点时区月份内各日期的有效公开 Note 数量."""
     settings = repo.setting_row(db)
     return {"year": year, "month": month, "days": service.public_calendar(db, year, month, settings["timezone"])}
 
@@ -108,11 +116,13 @@ def timeline(
     item_id: int | None = Query(default=None, gt=0),
     db=Depends(get_db),
 ):
+    """按发生时间倒序返回公开时间线,并支持分类,标签和 Item 过滤."""
     return _timeline_response(db, request, category_code=category, tag_slugs=tag, item_id=item_id, cursor=cursor, limit=limit)
 
 
 @router.get("/notes/{note_id}")
 def note(note_id: int, db=Depends(get_db)):
+    """返回一条有效公开 Note;私密 Note 或关联私密 Item 时统一隐藏."""
     row = db.execute(f"SELECT n.* FROM notes n WHERE n.id=? AND {repo.PUBLIC_NOTE_SQL}", (note_id,)).fetchone()
     if not row:
         raise AppError("not_found", "Note not found", 404)
@@ -121,11 +131,13 @@ def note(note_id: int, db=Depends(get_db)):
 
 @router.get("/items")
 def items(category: str | None = Query(default=None, max_length=80), db=Depends(get_db)):
+    """返回指定根分类下的公开 Item 列表."""
     return {"items": [service.item_dict(db, row, public=True) for row in repo.public_items(db, category)]}
 
 
 @router.get("/items/{item_id}")
 def item(item_id: int, request: Request, cursor: str | None = None, limit: int = Query(default=20, ge=1, le=50), db=Depends(get_db)):
+    """返回公开 Item 详情及其公开 Note 时间线."""
     row = db.execute(f"""SELECT i.*,c.code AS category_code,c.name AS category_name,
       COALESCE((SELECT MAX(n.started_at) FROM notes n JOIN note_items ni ON ni.note_id=n.id WHERE ni.item_id=i.id AND {repo.PUBLIC_NOTE_SQL}),i.created_at) AS activity_at
       FROM items i JOIN categories c ON c.id=i.category_id WHERE i.id=? AND i.visibility='public'""", (item_id,)).fetchone()
@@ -138,6 +150,7 @@ def item(item_id: int, request: Request, cursor: str | None = None, limit: int =
 
 @router.get("/items/{item_id}/poster")
 def item_poster(item_id: int, request: Request, db=Depends(get_db)):
+    """在确认 Item 公开后读取其封面文件."""
     row = db.execute("SELECT poster_path FROM items WHERE id=? AND visibility='public'", (item_id,)).fetchone()
     if not row or not row["poster_path"]:
         raise AppError("not_found", "poster not found", 404)
@@ -154,6 +167,7 @@ def tag(
     limit: int = Query(default=20, ge=1, le=50),
     db=Depends(get_db),
 ):
+    """返回一个或多个标签的交集时间线,并只暴露仍有公开 Note 的标签."""
     selected_slugs = _unique_tag_slugs([slug, *(tag or [])])
     public_tags = {row["slug"]: row for row in repo.public_tags(db)}
     if any(selected_slug not in public_tags for selected_slug in selected_slugs):
@@ -169,6 +183,7 @@ def tag(
 
 @router.get("/index")
 def index(db=Depends(get_db)):
+    """返回公共分类,标签和 Item 索引,并过滤没有公开内容的非根分类."""
     categories = [row for row in repo.public_categories(db) if row["is_root"] or row["note_count"]]
     return {
         "categories": [dict(row) for row in categories],
